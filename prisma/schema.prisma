@@ -1,0 +1,485 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ============================================================
+// CORE — Multi-tenancy & Auth
+// ============================================================
+
+model Account {
+  id                String    @id @default(cuid())
+  name              String
+  taxStatus         String    @default("monotributista") // monotributista | responsable_inscripto
+  includeIvaInCost  Boolean   @default(false)
+  ivaRate           Float     @default(21.00)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  branches          Branch[]
+  members           AccountMember[]
+  
+  // Catalogs
+  productCategories ProductCategory[]
+  costCategories    CostCategory[]
+  paymentMethods    PaymentMethod[]
+  suppliers         Supplier[]
+  clients           Client[]
+  
+  // Products & Pricing
+  products          Product[]
+  priceLists        PriceList[]
+  
+  // Transactions
+  sales             Sale[]
+  purchases         Purchase[]
+  
+  // Stock & Inventory
+  stockMovements    StockMovement[]
+  
+  // Banking & Finance
+  bankAccounts      BankAccount[]
+  cashFlowEntries   CashFlowEntry[]
+  projections       Projection[]
+
+  @@map("accounts")
+}
+
+model Branch {
+  id        String    @id @default(cuid())
+  accountId String
+  name      String
+  address   String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  members   AccountMember[]
+  sales     Sale[]
+  purchases Purchase[]
+  stockMovements StockMovement[]
+
+  @@unique([accountId, name])
+  @@map("branches")
+}
+
+model AccountMember {
+  id            String    @id @default(cuid())
+  accountId     String
+  userId        String    // FK a auth.users (Supabase Auth)
+  branchId      String?   // null = acceso a todas las sucursales
+  role          String    @default("viewer") // owner | admin | seller | viewer
+  displayName   String?
+  commissionPct Float     @default(0)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  // Relations
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  branch        Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  sales         Sale[]    // Vendedor
+
+  @@unique([accountId, userId])
+  @@map("account_members")
+}
+
+// ============================================================
+// CATALOGS
+// ============================================================
+
+model ProductCategory {
+  id        String    @id @default(cuid())
+  accountId String
+  name      String
+  description String?
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  products  Product[]
+  sales     Sale[]
+
+  @@unique([accountId, name])
+  @@map("product_categories")
+}
+
+model CostCategory {
+  id        String    @id @default(cuid())
+  accountId String
+  name      String
+  costType  String    // variable | fijo | impuestos
+  description String?
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  purchases Purchase[]
+
+  @@unique([accountId, name])
+  @@map("cost_categories")
+}
+
+model PaymentMethod {
+  id                  String    @id @default(cuid())
+  accountId           String
+  name                String
+  accreditationDays   Int       @default(0)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+
+  // Relations
+  account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  salePayments        SalePayment[]
+  purchasePayments    PurchasePayment[]
+
+  @@unique([accountId, name])
+  @@map("payment_methods")
+}
+
+model Supplier {
+  id        String    @id @default(cuid())
+  accountId String
+  name      String
+  cuit      String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  products  Product[]
+  purchases Purchase[]
+
+  @@map("suppliers")
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  accountId String
+  name      String
+  clientType String?
+  cuit      String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sales     Sale[]
+
+  @@map("clients")
+}
+
+// ============================================================
+// PRODUCTS & PRICING
+// ============================================================
+
+model Product {
+  id                  String    @id @default(cuid())
+  accountId           String
+  categoryId          String
+  supplierId          String?
+  
+  name                String
+  barcode             String?
+  sku                 String?
+  unit                String    @default("unidad") // unidad | kg | litro | metro | par
+  origin              String    @default("comprado") // fabricado | comprado
+  
+  // Stock
+  initialStock        Float     @default(0)
+  minStock            Float     @default(0)
+  
+  // Costs (components)
+  acquisitionCost     Float     @default(0)
+  rawMaterialCost     Float     @default(0)
+  laborCost           Float     @default(0)
+  packagingCost       Float     @default(0)
+  // unitCost = acquisition + raw + labor + packaging (calculated in backend)
+  
+  isActive            Boolean   @default(true)
+  lastCostUpdate      DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category            ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  supplier            Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  priceListItems      PriceListItem[]
+  sales               Sale[]
+  purchases           Purchase[]
+  stockMovements      StockMovement[]
+
+  @@map("products")
+}
+
+model PriceList {
+  id        String    @id @default(cuid())
+  accountId String
+  name      String
+  isDefault Boolean   @default(false)
+  sortOrder Int       @default(0)
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  // Relations
+  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  items     PriceListItem[]
+  sales     Sale[]
+
+  @@unique([accountId, name])
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id          String    @id @default(cuid())
+  priceListId String
+  productId   String
+  
+  markupPct   Float     @default(0)
+  // sale_price = product.unitCost × (1 + markupPct/100) [calculated in backend]
+  // sale_price_with_iva = sale_price × (1 + account.ivaRate/100) [only if RI, calculated in backend]
+  // contribution_margin = sale_price - product.unitCost [calculated in backend]
+  // margin_pct = contribution_margin / sale_price × 100 [calculated in backend]
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  priceList   PriceList @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, productId])
+  @@map("price_list_items")
+}
+
+// ============================================================
+// TRANSACTIONS — SALES
+// ============================================================
+
+model Sale {
+  id                String    @id @default(cuid())
+  accountId         String
+  branchId          String?
+  productId         String
+  categoryId        String
+  priceListId       String?
+  clientId          String?
+  sellerId          String?
+  
+  saleDate          DateTime
+  origin            String    // mayorista | minorista
+  unitPrice         Float
+  unitCost          Float     // snapshot del costo al momento
+  quantity          Float     @default(1)
+  discountPct       Float     @default(0)
+  
+  invoiced          Boolean   @default(false)
+  invoiceNumber     String?
+  
+  status            String    @default("pending") // pending | partial | paid | overdue
+  dueDate           DateTime?
+  notes             String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  branch            Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  product           Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  category          ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  priceList         PriceList? @relation(fields: [priceListId], references: [id], onDelete: SetNull)
+  client            Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  seller            AccountMember? @relation(fields: [sellerId], references: [id], onDelete: SetNull)
+  
+  payments          SalePayment[]
+
+  @@map("sales")
+}
+
+model SalePayment {
+  id                String    @id @default(cuid())
+  saleId            String
+  paymentMethodId   String
+  
+  amount            Float
+  paymentDate       DateTime
+  accreditationDate DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+
+  // Relations
+  sale              Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  paymentMethod     PaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+
+  @@map("sale_payments")
+}
+
+// ============================================================
+// TRANSACTIONS — PURCHASES
+// ============================================================
+
+model Purchase {
+  id                String    @id @default(cuid())
+  accountId         String
+  branchId          String?
+  supplierId        String?
+  productId         String?
+  costCategoryId    String
+  
+  invoiceDate       DateTime
+  description       String?
+  unitCost          Float
+  quantity          Float     @default(1)
+  discountPct       Float     @default(0)
+  ivaAmount         Float     @default(0)
+  
+  invoiceNumber     String?
+  dueDate           DateTime?
+  
+  status            String    @default("pending") // pending | partial | paid | overdue
+  notes             String?
+  
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  branch            Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  supplier          Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  product           Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  costCategory      CostCategory @relation(fields: [costCategoryId], references: [id], onDelete: Restrict)
+  
+  payments          PurchasePayment[]
+
+  @@map("purchases")
+}
+
+model PurchasePayment {
+  id                String    @id @default(cuid())
+  purchaseId        String
+  paymentMethodId   String
+  
+  amount            Float
+  paymentDate       DateTime
+  accreditationDate DateTime?
+  notes             String?
+  createdAt         DateTime  @default(now())
+
+  // Relations
+  purchase          Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  paymentMethod     PaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+
+  @@map("purchase_payments")
+}
+
+// ============================================================
+// STOCK & INVENTORY
+// ============================================================
+
+model StockMovement {
+  id              String    @id @default(cuid())
+  accountId       String
+  productId       String
+  branchId        String?
+  
+  movementType    String    // initial | purchase | sale | merchandise_entry | adjustment
+  quantity        Float
+  unitCost        Float?    // snapshot for PEPS
+  
+  referenceType   String?   // sale | purchase | merchandise_entry | adjustment
+  referenceId     String?   // Generic reference ID (not a FK at DB level)
+  
+  movementDate    DateTime
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  account         Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch          Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@map("stock_movements")
+}
+
+// ============================================================
+// BANKING & FINANCE
+// ============================================================
+
+model BankAccount {
+  id              String    @id @default(cuid())
+  accountId       String
+  name            String
+  initialBalance  Float     @default(0)
+  balanceDate     DateTime?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  account         Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  cashFlowEntries CashFlowEntry[]
+
+  @@map("bank_accounts")
+}
+
+model CashFlowEntry {
+  id              String    @id @default(cuid())
+  accountId       String
+  bankAccountId   String
+  
+  entryDate       DateTime
+  movementType    String    // ingreso | egreso | apertura | transferencia
+  concept         String?
+  amount          Float
+  
+  relatedSaleId   String?
+  relatedPurchaseId String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  // Relations
+  account         Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  bankAccount     BankAccount @relation(fields: [bankAccountId], references: [id], onDelete: Cascade)
+
+  @@map("cash_flow_entries")
+}
+
+model Projection {
+  id              String    @id @default(cuid())
+  accountId       String
+  year            Int
+  month           Int
+  
+  projectedSales  Float?
+  exchangeRate    Float?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  account         Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, year, month])
+  @@map("projections")
+}
