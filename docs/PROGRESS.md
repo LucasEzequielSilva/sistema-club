@@ -5,7 +5,7 @@
 | Fase | Estado | Progreso |
 |---|---|---|
 | **Fase 0: Setup** | ✅ DONE | 100% |
-| **Fase 1: TIER 1 Core** | ⬜ PENDIENTE | 0% |
+| **Fase 1: TIER 1 Core** | 🔄 EN PROGRESO | 17% (1/6 módulos) |
 | **Fase 2: TIER 2 Análisis** | ⬜ PENDIENTE | 0% |
 | **Fase 3: POS** | ⬜ PENDIENTE | 0% |
 | **Fase 4: Beta Testing** | ⬜ PENDIENTE | 0% |
@@ -72,18 +72,36 @@ Ver `/docs/DECISIONS.md` para detalles completos.
 
 ## Fase 1: TIER 1 Core — MODULOS (en orden de ejecución)
 
-### mod-clasificaciones ⬜ PENDIENTE
+### mod-clasificaciones ✅ DONE
 
-- [ ] CRUD de product_categories
-- [ ] CRUD de cost_categories
-- [ ] CRUD de payment_methods
-- [ ] API routes con tRPC
-- [ ] UI con shadcn/ui
-- [ ] Tests
+**Completado en Sesión 1 (2025-02-25)**
+
+- [x] CRUD de product_categories (crear, listar, actualizar, soft delete)
+- [x] CRUD de cost_categories (crear, listar, actualizar con type selector)
+- [x] CRUD de payment_methods (crear, listar, actualizar, accreditation_days)
+- [x] API routes con tRPC (init, router, HTTP handler)
+- [x] UI con shadcn/ui (Tabs, Dialog, Table, Form, Select, Badge)
+- [x] Validadores Zod para los 3 tipos
+- [x] Seed function para defaults en nueva account
+- [x] Sonner para toasts
+- [x] Sidebar con navegación
+
+**Stack usado:**
+- tRPC para type-safe API
+- Prisma para DB
+- Zod para validación
+- shadcn/ui para componentes
+- Sonner para notifications
+
+**Pendiente para production:**
+- Tests unitarios (Zod validators)
+- Tests de integración (tRPC mutations)
+- E2E tests con Playwright
+- Auth con Supabase
 
 **Dependencias:** Ninguna (es la base)
 **Alimenta a:** mod-proveedores, mod-productos
-**Sesión esperada:** Sesión 1 (Sonnet)
+**Sesión esperada:** Sesión 1 (Sonnet) ✅
 
 ---
 

@@ -104,4 +104,49 @@
 
 ---
 
+## [2025-02-25] SESIÓN 1 - tRPC + shadcn/ui Implementation
+
+**Contexto**: Implementación del primer módulo (mod-clasificaciones). Necesitábamos validar que el stack arquitectónico funcione en práctica.
+
+**Decisiones tomadas:**
+
+### 1. tRPC como API framework
+- ✅ Elegimos **tRPC** sobre REST API
+- **Razón**: Type safety end-to-end, auto-generación de tipos, mejor DX
+- **Alternativas descartadas**: REST API (menos type-safe), GraphQL (over-engineered)
+
+### 2. Validación con Zod en frontend + backend
+- ✅ Zod validators en `src/lib/validators/`
+- ✅ Re-validación en tRPC procedures
+- **Razón**: Type safety + runtime safety, lightweight
+
+### 3. Soft delete con `isActive` field
+- ✅ `isActive` BOOLEAN en ProductCategory, CostCategory, PaymentMethod
+- ✅ Hard delete solo si NO hay dependencias
+- **Razón**: Mantiene historial, no pierde referencias
+
+### 4. Toasts con Sonner (no React-Toastify)
+- ✅ **Sonner** para notificaciones
+- **Razón**: UX mejor, stacking automático, moderno
+
+### 5. UI con shadcn/ui (no Material-UI)
+- ✅ **shadcn/ui** para componentes
+- **Razón**: Lightweight, customizable, copy-paste code, mejor para Tailwind v4
+
+### 6. Dialogs reutilizables con props
+- ✅ ProductCategoryDialog, CostCategoryDialog, PaymentMethodDialog
+- **Razón**: Patrón limpio, reutilizable, fácil de mantener
+
+### 7. Account ID hardcodeado (por ahora)
+- ✅ `const ACCOUNT_ID = "test-account-id"`
+- ✅ Será reemplazado por session/context en auth
+- **Razón**: MVP sin auth aún, permite testear toda la lógica
+
+### 8. Seed script en TypeScript (no SQL)
+- ✅ `scripts/seed.ts` con Prisma
+- ✅ Crea 9 PaymentMethods + 8 CostCategories por defecto
+- **Razón**: Type-safe, reutilizable, documentado
+
+---
+
 *Documento vivo. Actualizar cuando se descubran nuevos requerimientos.*
