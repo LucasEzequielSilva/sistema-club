@@ -7,6 +7,11 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   {
+    title: "Tablero",
+    href: "/tablero",
+    icon: "🏠",
+  },
+  {
     title: "Clasificaciones",
     href: "/clasificaciones",
     icon: "📂",
@@ -30,6 +35,46 @@ const navItems = [
     title: "Compras",
     href: "/compras",
     icon: "🛒",
+  },
+  {
+    title: "Mercadería",
+    href: "/mercaderia",
+    icon: "📋",
+  },
+  {
+    title: "Resumen",
+    href: "/resumen",
+    icon: "📊",
+  },
+  {
+    title: "Estados",
+    href: "/estados-resultados",
+    icon: "📈",
+  },
+  {
+    title: "Cuentas",
+    href: "/cuentas",
+    icon: "🏦",
+  },
+  {
+    title: "Cashflow",
+    href: "/cashflow",
+    icon: "📉",
+  },
+  {
+    title: "Cuadro KPIs",
+    href: "/cuadro-resumen",
+    icon: "🎯",
+  },
+  {
+    title: "Punto de Venta",
+    href: "/pos",
+    icon: "🛍️",
+  },
+  {
+    title: "Facturacion",
+    href: "/facturacion",
+    icon: "🧾",
   },
 ];
 

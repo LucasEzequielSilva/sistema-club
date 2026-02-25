@@ -49,6 +49,10 @@ model Account {
   bankAccounts      BankAccount[]
   cashFlowEntries   CashFlowEntry[]
   projections       Projection[]
+  
+  // Invoicing
+  afipConfig        AfipConfig?
+  invoices          Invoice[]
 
   @@map("accounts")
 }
@@ -314,6 +318,7 @@ model Sale {
   seller            AccountMember? @relation(fields: [sellerId], references: [id], onDelete: SetNull)
   
   payments          SalePayment[]
+  invoices          Invoice[]
 
   @@map("sales")
 }
@@ -482,4 +487,69 @@ model Projection {
 
   @@unique([accountId, year, month])
   @@map("projections")
+}
+
+// ============================================================
+// INVOICING (AFIP)
+// ============================================================
+
+model AfipConfig {
+  id            String    @id @default(cuid())
+  accountId     String    @unique
+  cuit          String    // CUIT number (XXXXXXXXXXX, no dashes)
+  puntoVenta    Int       @default(1)
+  accessToken   String    // AfipSDK access token
+  cert          String?   // X.509 certificate PEM (for production)
+  privateKey    String?   // Private key PEM (for production)
+  isProduction  Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  account       Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("afip_configs")
+}
+
+model Invoice {
+  id                String    @id @default(cuid())
+  accountId         String
+  saleId            String?
+
+  // AFIP invoice identification
+  invoiceType       Int       // 1=A, 6=B, 11=C, etc.
+  invoiceTypeName   String    // "Factura A", "Factura B", "Factura C"
+  puntoVenta        Int
+  invoiceNumber     Int
+
+  invoiceDate       DateTime
+  concepto          Int       @default(1) // 1=Productos, 2=Servicios, 3=Productos y Servicios
+
+  // Customer
+  docTipo           Int       // 80=CUIT, 86=CUIL, 96=DNI, 99=Sin identificar
+  docNro            String    // Document number (string to handle leading zeros)
+  customerName      String?
+
+  // Amounts
+  netAmount         Float     // Importe neto gravado
+  exemptAmount      Float     @default(0) // Importe exento
+  ivaAmount         Float     @default(0) // Importe IVA
+  tributesAmount    Float     @default(0) // Importe tributos
+  totalAmount       Float     // Importe total
+
+  // AFIP response
+  cae               String?   // CAE number
+  caeExpiration     DateTime? // CAE expiration date
+  afipResult        String?   // A=Aprobado, R=Rechazado
+  afipObservations  String?   // AFIP observations / errors
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  account           Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  sale              Sale?     @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@unique([accountId, invoiceType, puntoVenta, invoiceNumber])
+  @@map("invoices")
 }
