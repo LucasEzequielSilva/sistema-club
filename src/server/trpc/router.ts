@@ -6,9 +6,11 @@
 
 import { router } from "./init";
 import { clasificacionesRouter } from "./routers/clasificaciones";
+import { proveedoresRouter } from "./routers/proveedores";
 
 export const appRouter = router({
   clasificaciones: clasificacionesRouter,
+  proveedores: proveedoresRouter,
 });
 
 // export type definition of API

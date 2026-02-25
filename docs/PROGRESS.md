@@ -5,7 +5,7 @@
 | Fase | Estado | Progreso |
 |---|---|---|
 | **Fase 0: Setup** | ✅ DONE | 100% |
-| **Fase 1: TIER 1 Core** | 🔄 EN PROGRESO | 17% (1/6 módulos) |
+| **Fase 1: TIER 1 Core** | 🔄 EN PROGRESO | 33% (2/6 módulos) |
 | **Fase 2: TIER 2 Análisis** | ⬜ PENDIENTE | 0% |
 | **Fase 3: POS** | ⬜ PENDIENTE | 0% |
 | **Fase 4: Beta Testing** | ⬜ PENDIENTE | 0% |
@@ -105,17 +105,32 @@ Ver `/docs/DECISIONS.md` para detalles completos.
 
 ---
 
-### mod-proveedores ⬜ PENDIENTE
+### mod-proveedores ✅ DONE
 
-- [ ] CRUD suppliers
-- [ ] Historial de compras por proveedor
-- [ ] API routes con tRPC
-- [ ] UI con listado, formulario, detalles
-- [ ] Tests
+**Completado en Sesión 2 (2025-02-25)**
 
-**Dependencias:** mod-clasificaciones
+- [x] tRPC router: list (con búsqueda debounced), getById, create, update, softDelete, delete
+- [x] Zod validators: createSupplier, updateSupplier
+- [x] Página `/proveedores`: tabla con columnas Nombre/CUIT/Teléfono/Email/Ubicación/Compras
+- [x] Búsqueda por nombre con debounce (300ms)
+- [x] Soft delete (desactivar) separado de hard delete
+- [x] Dialog crear/editar: grid 2 columnas para CUIT+Teléfono, textarea para notas
+- [x] Vista detalle: datos de contacto + estadísticas + historial de compras
+- [x] Historial de compras: real si existen, placeholder si no hay
+- [x] Sidebar ya tenía el enlace a Proveedores ✓
+- [x] Validación nombre duplicado, email format, longitud máxima
+- [x] Fila inactiva con opacity-50
+
+**Archivos creados:**
+- `src/lib/validators/proveedores.ts`
+- `src/server/trpc/routers/proveedores.ts`
+- `src/app/(dashboard)/proveedores/page.tsx`
+- `src/app/(dashboard)/proveedores/components/supplier-dialog.tsx`
+- `src/app/(dashboard)/proveedores/components/supplier-detail.tsx`
+
+**Dependencias:** mod-clasificaciones ✅
 **Alimenta a:** mod-productos, mod-compras
-**Sesión esperada:** Sesión 2 (Sonnet)
+**Sesión esperada:** Sesión 2 (Sonnet) ✅
 
 ---
 
