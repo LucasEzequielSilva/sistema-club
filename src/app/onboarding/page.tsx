@@ -153,7 +153,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         <p className="text-xs font-bold uppercase tracking-widest text-primary/60 mb-2">
           Sistema Club
         </p>
-        <h1 className="text-3xl font-bold text-foreground">¡Hola, Mati! 👋</h1>
+        <h1 className="text-3xl font-bold text-foreground">¡Hola! 👋</h1>
         <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
           Vamos a dejar tu negocio listo para vender.
           <br />
@@ -713,7 +713,7 @@ function StepDone({
 
         <div>
           <h2 className="text-2xl font-bold text-foreground">
-            ¡Todo listo, Mati! 🎉
+            ¡Todo listo! 🎉
           </h2>
           <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
             Tu negocio está configurado.

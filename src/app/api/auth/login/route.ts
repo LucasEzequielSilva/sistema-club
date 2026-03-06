@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  checkCredentials,
-  createSessionToken,
-  COOKIE_NAME,
-} from "@/lib/session";
+import { createSessionToken, COOKIE_NAME } from "@/lib/session";
+import { db } from "@/server/db";
 
-const ACCOUNT_ID = "test-account-id";
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 días en segundos
 
 export async function POST(req: NextRequest) {
@@ -21,8 +17,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!checkCredentials(email, password)) {
-      // Delay de 500ms para dificultar brute-force
+    // Validar contra DB
+    const user = await db.user.findFirst({
+      where: {
+        email: email.trim().toLowerCase(),
+        isActive: true,
+      },
+    });
+
+    if (!user || user.password !== password) {
       await new Promise((r) => setTimeout(r, 500));
       return NextResponse.json(
         { error: "Email o contraseña incorrectos" },
@@ -30,7 +33,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const token = await createSessionToken(ACCOUNT_ID, email);
+    const token = await createSessionToken(user.accountId, email);
     const res = NextResponse.json({ ok: true });
     res.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,

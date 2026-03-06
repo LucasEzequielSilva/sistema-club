@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Menu, Store, X } from "lucide-react";
 import { Sidebar } from "./sidebar";
 
-export function MobileNav() {
+export function MobileNav({ userEmail }: { userEmail?: string } = {}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -46,7 +46,7 @@ export function MobileNav() {
           >
             <X className="w-4 h-4" />
           </button>
-          <Sidebar onNavigate={() => setOpen(false)} />
+          <Sidebar onNavigate={() => setOpen(false)} userEmail={userEmail} />
         </div>
       </div>
     </>

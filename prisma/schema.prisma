@@ -24,6 +24,7 @@ model Account {
   updatedAt         DateTime  @updatedAt
 
   // Relations
+  users             User[]
   branches          Branch[]
   members           AccountMember[]
   
@@ -97,6 +98,26 @@ model AccountMember {
 
   @@unique([accountId, userId])
   @@map("account_members")
+}
+
+// ============================================================
+// USERS
+// ============================================================
+
+model User {
+  id          String    @id @default(cuid())
+  accountId   String
+  email       String    @unique
+  password    String    // plain text MVP — hash en v2
+  name        String?
+  role        String    @default("admin") // admin | viewer
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  account     Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("users")
 }
 
 // ============================================================

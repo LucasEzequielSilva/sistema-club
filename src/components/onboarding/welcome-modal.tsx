@@ -101,10 +101,10 @@ export function WelcomeModal() {
               Sistema Club
             </p>
             <h1 className="text-2xl font-bold text-foreground">
-              ¡Hola, Mati! 👋
+              ¡Bienvenido! 👋
             </h1>
             <p className="text-sm text-muted-foreground">
-              Tu negocio de colchones,{" "}
+              Tu negocio,{" "}
               <span className="font-medium text-foreground">organizado en minutos.</span>
             </p>
           </div>

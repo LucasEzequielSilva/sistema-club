@@ -9,7 +9,7 @@ from psycopg2.extras import execute_values
 from datetime import datetime
 
 SQLITE_PATH = "dev.db"
-PG_DSN = "postgresql://postgres:Lacaverna10_$@db.nimyvmeywqbyfzzgjwfa.supabase.co:5432/postgres"
+PG_DSN = "postgresql://neondb_owner:npg_P4KavVbtng8C@ep-withered-queen-ac9yoah5.sa-east-1.aws.neon.tech/neondb?sslmode=require"
 
 
 def sqlite_conn():

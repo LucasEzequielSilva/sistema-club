@@ -23,6 +23,7 @@ import {
   Sun,
   BookOpen,
   LogOut,
+  Settings,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useState } from "react";
@@ -56,7 +57,9 @@ const catalogosNav = [
 const finanzasPaths  = finanzasNav.map((i) => i.href);
 const catalogosPaths = catalogosNav.map((i) => i.href);
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
+export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; userEmail?: string } = {}) {
+  const displayName = userEmail ? userEmail.split("@")[0] : "Usuario";
+  const initials = displayName.slice(0, 1).toUpperCase();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -206,15 +209,28 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
         </nav>
       </ScrollArea>
 
-      {/* Footer — usuario + logout */}
-      <div className="px-2 py-3 border-t border-[var(--sidebar-border)]">
+      {/* Footer — settings + usuario + logout */}
+      <div className="px-2 py-3 border-t border-[var(--sidebar-border)] space-y-1">
+        <Link href="/settings" onClick={onNavigate}>
+          <div className={cn(
+            "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors duration-150 cursor-pointer group",
+            pathname.startsWith("/settings")
+              ? "border-l-2 border-primary bg-primary/[0.08] text-foreground font-medium"
+              : "text-muted-foreground hover:bg-accent hover:text-foreground"
+          )}>
+            <Settings className={cn("w-4 h-4 shrink-0 transition-colors",
+              pathname.startsWith("/settings") ? "text-primary" : "text-muted-foreground/50 group-hover:text-muted-foreground"
+            )} />
+            <span className="flex-1">Configuración</span>
+          </div>
+        </Link>
         <div className="flex items-center gap-2 px-3 py-2 rounded-md group">
           <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0">
-            M
+            {initials}
           </div>
           <div className="leading-none min-w-0 flex-1">
-            <p className="text-xs text-foreground font-medium truncate">Mati</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Administrador</p>
+            <p className="text-xs text-foreground font-medium truncate">{displayName}</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">{userEmail}</p>
           </div>
           <button
             onClick={handleLogout}

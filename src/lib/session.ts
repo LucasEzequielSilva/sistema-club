@@ -94,13 +94,42 @@ export async function verifySessionToken(
   }
 }
 
+export type UserEntry = {
+  email: string;
+  password: string;
+  accountId: string;
+};
+
+/** Parsea AUTH_USERS="email:pass:accountId,..." */
+export function parseUsers(): UserEntry[] {
+  const raw = process.env.AUTH_USERS ?? "";
+  if (!raw) {
+    // Fallback single-user
+    const email = process.env.AUTH_EMAIL ?? "";
+    const password = process.env.AUTH_PASSWORD ?? "";
+    if (email && password) return [{ email: email.toLowerCase(), password, accountId: "test-account-id" }];
+    return [];
+  }
+  return raw.split(",").map((u) => {
+    const parts = u.trim().split(":");
+    return {
+      email: parts[0].trim().toLowerCase(),
+      password: parts[1].trim(),
+      accountId: parts[2]?.trim() ?? "test-account-id",
+    };
+  });
+}
+
 /** Solo para API routes (Node.js runtime) — no usar en middleware */
 export function checkCredentials(email: string, password: string): boolean {
-  const validEmail = process.env.AUTH_EMAIL ?? "";
-  const validPassword = process.env.AUTH_PASSWORD ?? "";
-  if (!validEmail || !validPassword) return false;
-  return (
-    email.trim().toLowerCase() === validEmail.trim().toLowerCase() &&
-    password === validPassword
+  const normalizedEmail = email.trim().toLowerCase();
+  return parseUsers().some(
+    (u) => u.email === normalizedEmail && u.password === password
   );
+}
+
+/** Devuelve el accountId correspondiente al email */
+export function getAccountIdForEmail(email: string): string {
+  const normalizedEmail = email.trim().toLowerCase();
+  return parseUsers().find((u) => u.email === normalizedEmail)?.accountId ?? "test-account-id";
 }

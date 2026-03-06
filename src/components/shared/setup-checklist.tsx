@@ -202,7 +202,7 @@ export function SetupChecklist({ hasSales }: { hasSales: boolean }) {
             )}
           </div>
 
-          <h2 className="text-2xl font-bold text-foreground">¡Todo listo, Mati! 🎉</h2>
+          <h2 className="text-2xl font-bold text-foreground">¡Todo listo! 🎉</h2>
           <p className="text-muted-foreground mt-2 max-w-xs mx-auto text-sm leading-relaxed">
             Tu negocio está configurado. El tablero se actualiza con tus datos en tiempo real.
           </p>
@@ -281,7 +281,7 @@ export function SetupChecklist({ hasSales }: { hasSales: boolean }) {
               <>5 pasos · menos de 10 minutos</>
             ) : (
               <>
-                ¡Vas muy bien, Mati!{" "}
+                ¡Vas muy bien!{" "}
                 <span className="font-medium text-foreground">
                   {steps.length - doneCount} paso{steps.length - doneCount !== 1 ? "s" : ""} más
                 </span>
