@@ -19,7 +19,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { Landmark, MoreHorizontal, Trash2, Loader2 } from "lucide-react";
+import { useConfirm } from "@/hooks/use-confirm";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { AccountDialog } from "./components/account-dialog";
 import { EntryDialog } from "./components/entry-dialog";
 
@@ -63,6 +76,19 @@ export default function CuentasPage() {
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
 
+  const [confirmDeleteAccount, ConfirmDeleteAccountDialog] = useConfirm({
+    title: "Eliminar cuenta",
+    description: "Esta acción elimina la cuenta y no se puede deshacer.",
+    confirmLabel: "Eliminar",
+    destructive: true,
+  });
+  const [confirmDeleteEntry, ConfirmDeleteEntryDialog] = useConfirm({
+    title: "Eliminar movimiento",
+    description: "Se eliminará este movimiento manual. Esta acción no se puede deshacer.",
+    confirmLabel: "Eliminar",
+    destructive: true,
+  });
+
   const loadAccounts = useCallback(async () => {
     setLoadingAccounts(true);
     try {
@@ -87,7 +113,7 @@ export default function CuentasPage() {
   }, [loadAccounts]);
 
   const handleDeleteAccount = async (id: string, name: string) => {
-    if (!confirm(`¿Eliminar "${name}"? Esta acción no se puede deshacer.`)) return;
+    if (!(await confirmDeleteAccount())) return;
     try {
       await trpc.cuentas.deleteAccount.mutate({ id });
       toast.success(`"${name}" eliminada`);
@@ -155,7 +181,7 @@ export default function CuentasPage() {
   }, [tab, loadFlow]);
 
   const handleDeleteEntry = async (id: string) => {
-    if (!confirm("¿Eliminar este movimiento manual?")) return;
+    if (!(await confirmDeleteEntry())) return;
     try {
       await trpc.cuentas.deleteEntry.mutate({ id });
       toast.success("Movimiento eliminado");
@@ -176,125 +202,97 @@ export default function CuentasPage() {
 
   const activeAccounts = accounts.filter((a) => a.isActive);
 
-  const TABS: { id: TabId; label: string }[] = [
-    { id: "cuentas", label: "Cuentas" },
-    { id: "flujo", label: "Flujo de Fondos" },
-  ];
+  const tabActions = (
+    <div className="flex gap-2">
+      {tab === "cuentas" && (
+        <Button onClick={openNewAccount} size="sm">+ Nueva Cuenta</Button>
+      )}
+      {tab === "flujo" && (
+        <Button onClick={() => setEntryDialogOpen(true)} size="sm">
+          + Movimiento Manual
+        </Button>
+      )}
+    </div>
+  );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Cuentas y Flujo de Fondos</h1>
-        <p className="text-gray-500 mt-1">
-          Gestión de cuentas bancarias y movimientos de caja
-        </p>
-      </div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <PageHeader
+        title="Cuentas y Flujo"
+        description="Cuentas bancarias y movimientos de fondos"
+        icon={Landmark}
+        actions={tabActions}
+      />
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex gap-1 border-b">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                tab === t.id
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabId)}>
+        <TabsList className="mb-2">
+          <TabsTrigger value="cuentas">Cuentas</TabsTrigger>
+          <TabsTrigger value="flujo">Flujo de Fondos</TabsTrigger>
+        </TabsList>
 
-        {/* Actions */}
-        <div className="flex gap-2">
-          {tab === "cuentas" && (
-            <Button onClick={openNewAccount}>+ Nueva Cuenta</Button>
-          )}
-          {tab === "flujo" && (
-            <Button onClick={() => setEntryDialogOpen(true)}>
-              + Movimiento Manual
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* ═══════════════════════════════════════ */}
-      {/* TAB: CUENTAS                           */}
-      {/* ═══════════════════════════════════════ */}
-      {tab === "cuentas" && (
-        <div className="space-y-6">
+        {/* ═══════════════════════════════════════ */}
+        {/* TAB: CUENTAS                           */}
+        {/* ═══════════════════════════════════════ */}
+        <TabsContent value="cuentas" className="space-y-6">
           {/* Summary cards */}
           {balanceSummary && (
             <div className="grid grid-cols-3 gap-4">
-              <div className="border rounded-lg p-4">
-                <p className="text-xs text-gray-500">Cuentas Activas</p>
-                <p className="text-2xl font-bold">
-                  {balanceSummary.accounts.length}
-                </p>
-              </div>
-              <div className="border rounded-lg p-4">
-                <p className="text-xs text-gray-500">Saldo Total (manual)</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    balanceSummary.totalBalance >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {formatCurrency(balanceSummary.totalBalance)}
-                </p>
-              </div>
-              <div className="border rounded-lg p-4">
-                <p className="text-xs text-gray-500">Nota</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Saldos basados en saldo inicial + movimientos manuales
-                </p>
-              </div>
+              <StatCard
+                title="Cuentas Activas"
+                value={String(balanceSummary.accounts.length)}
+                variant="info"
+              />
+              <StatCard
+                title="Saldo Total (manual)"
+                value={formatCurrency(balanceSummary.totalBalance)}
+                variant={balanceSummary.totalBalance >= 0 ? "success" : "danger"}
+              />
+              <StatCard
+                title="Nota"
+                value="Saldos calculados"
+                subtitle="Saldo inicial + movimientos manuales"
+                variant="muted"
+              />
             </div>
           )}
 
           {/* Accounts table */}
           {loadingAccounts ? (
-            <div className="text-center py-16 text-gray-400">Cargando...</div>
+            <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
           ) : accounts.length === 0 ? (
-            <div className="text-center py-16 border rounded-lg">
-              <p className="text-gray-400 mb-4">No hay cuentas registradas</p>
-              <Button onClick={openNewAccount}>Crear primera cuenta</Button>
+            <div className="rounded-xl border border-border bg-card">
+              <EmptyState
+                icon={Landmark}
+                title="No hay cuentas registradas"
+                description="Creá tu primera cuenta bancaria para empezar a gestionar los fondos."
+                actionLabel="Crear primera cuenta"
+                onAction={openNewAccount}
+              />
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="rounded-xl border border-border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead className="text-right">Saldo Inicial</TableHead>
-                    <TableHead className="text-right">Saldo Actual</TableHead>
-                    <TableHead className="text-center">Movimientos</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Nombre</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo Inicial</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Saldo Actual</TableHead>
+                    <TableHead className="text-center text-xs uppercase text-muted-foreground">Movimientos</TableHead>
+                    <TableHead className="text-center text-xs uppercase text-muted-foreground">Estado</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {accounts.map((acc) => (
                     <TableRow
                       key={acc.id}
-                      className={!acc.isActive ? "opacity-50" : ""}
+                      className={`hover:bg-muted/40 ${!acc.isActive ? "opacity-50" : ""}`}
                     >
                       <TableCell className="font-medium">{acc.name}</TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-right font-mono font-semibold text-foreground">
                         {formatCurrency(acc.initialBalance)}
                       </TableCell>
-                      <TableCell
-                        className={`text-right font-mono font-semibold ${
-                          acc.currentBalance >= 0
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
+                      <TableCell className="text-right font-mono font-semibold text-foreground">
                         {formatCurrency(acc.currentBalance)}
                       </TableCell>
                       <TableCell className="text-center">
@@ -308,27 +306,32 @@ export default function CuentasPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditAccount(acc.id)}
-                          >
-                            Editar
-                          </Button>
-                          {acc.entryCount === 0 && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700"
-                              onClick={() =>
-                                handleDeleteAccount(acc.id, acc.name)
-                              }
-                            >
-                              Eliminar
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
                             </Button>
-                          )}
-                        </div>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditAccount(acc.id)}>
+                              Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              {acc.isActive ? "Desactivar" : "Activar"}
+                            </DropdownMenuItem>
+                            {acc.entryCount === 0 && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => handleDeleteAccount(acc.id, acc.name)}
+                                >
+                                  Eliminar
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -336,21 +339,19 @@ export default function CuentasPage() {
               </Table>
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
 
-      {/* ═══════════════════════════════════════ */}
-      {/* TAB: FLUJO DE FONDOS                   */}
-      {/* ═══════════════════════════════════════ */}
-      {tab === "flujo" && (
-        <div className="space-y-6">
+        {/* ═══════════════════════════════════════ */}
+        {/* TAB: FLUJO DE FONDOS                   */}
+        {/* ═══════════════════════════════════════ */}
+        <TabsContent value="flujo" className="space-y-6">
           {/* Filters */}
-          <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex flex-wrap gap-2 items-center p-3 bg-muted/50 rounded-lg border border-border">
             <Select
               value={String(month)}
               onValueChange={(v) => setMonth(Number(v))}
             >
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger className="w-[140px] h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -366,7 +367,7 @@ export default function CuentasPage() {
               value={String(year)}
               onValueChange={(v) => setYear(Number(v))}
             >
-              <SelectTrigger className="w-[100px]">
+              <SelectTrigger className="w-[100px] h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -382,7 +383,7 @@ export default function CuentasPage() {
               value={flowBankAccountId}
               onValueChange={setFlowBankAccountId}
             >
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] h-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -399,64 +400,59 @@ export default function CuentasPage() {
           {/* Summary cards */}
           {flowData && (
             <div className="grid grid-cols-4 gap-3">
-              <div className="border rounded-lg p-3">
-                <p className="text-xs text-gray-500">Ingresos</p>
-                <p className="text-lg font-bold text-green-600">
-                  {formatCurrency(flowData.totals.ingresos)}
-                </p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="text-xs text-gray-500">Egresos</p>
-                <p className="text-lg font-bold text-red-600">
-                  {formatCurrency(flowData.totals.egresos)}
-                </p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="text-xs text-gray-500">Neto</p>
-                <p
-                  className={`text-lg font-bold ${
-                    flowData.totals.neto >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }`}
-                >
-                  {formatCurrency(flowData.totals.neto)}
-                </p>
-              </div>
-              <div className="border rounded-lg p-3">
-                <p className="text-xs text-gray-500">Movimientos</p>
-                <p className="text-lg font-bold">{flowData.totals.count}</p>
-              </div>
+              <StatCard
+                title="Ingresos"
+                value={formatCurrency(flowData.totals.ingresos)}
+                variant="success"
+              />
+              <StatCard
+                title="Egresos"
+                value={formatCurrency(flowData.totals.egresos)}
+                variant="danger"
+              />
+              <StatCard
+                title="Neto"
+                value={formatCurrency(flowData.totals.neto)}
+                variant={flowData.totals.neto >= 0 ? "success" : "danger"}
+              />
+              <StatCard
+                title="Movimientos"
+                value={String(flowData.totals.count)}
+                variant="muted"
+              />
             </div>
           )}
 
           {/* Flow table */}
           {loadingFlow ? (
-            <div className="text-center py-16 text-gray-400">Cargando...</div>
+            <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
           ) : !flowData || flowData.items.length === 0 ? (
-            <div className="text-center py-16 border rounded-lg">
-              <p className="text-gray-400">
-                Sin movimientos en{" "}
-                {MONTHS[month]} {year}
-              </p>
+            <div className="rounded-xl border border-border bg-card">
+              <EmptyState
+                icon={Landmark}
+                title={`Sin movimientos en ${MONTHS[month]} ${year}`}
+                description="No hay movimientos de fondos registrados para el período y cuenta seleccionados."
+                actionLabel="+ Movimiento Manual"
+                onAction={() => setEntryDialogOpen(true)}
+              />
             </div>
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="rounded-xl border border-border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Concepto</TableHead>
-                    <TableHead>Medio / Cuenta</TableHead>
-                    <TableHead>Origen</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
-                    <TableHead className="text-right w-[80px]"></TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Concepto</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Medio / Cuenta</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Origen</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Monto</TableHead>
+                    <TableHead className="text-right w-[60px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {flowData.items.map((item: any) => (
-                    <TableRow key={`${item.source}-${item.id}`}>
+                    <TableRow key={`${item.source}-${item.id}`} className="hover:bg-muted/40">
                       <TableCell className="text-sm">
                         {formatDate(item.date)}
                       </TableCell>
@@ -473,19 +469,20 @@ export default function CuentasPage() {
                       <TableCell className="max-w-[250px] truncate">
                         {item.concept}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-500">
+                      <TableCell className="text-sm text-muted-foreground">
                         {item.method}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant="outline"
-                          className={`text-xs ${
+                          className="text-xs"
+                          style={
                             item.source === "venta"
-                              ? "border-green-300 text-green-700"
+                              ? { borderColor: "var(--success-muted-foreground)", color: "var(--success-muted-foreground)" }
                               : item.source === "compra"
-                                ? "border-red-300 text-red-700"
-                                : "border-gray-300 text-gray-600"
-                          }`}
+                                ? { borderColor: "var(--danger-muted-foreground)", color: "var(--danger-muted-foreground)" }
+                                : {}
+                          }
                         >
                           {item.source === "venta"
                             ? "Venta"
@@ -494,13 +491,7 @@ export default function CuentasPage() {
                               : "Manual"}
                         </Badge>
                       </TableCell>
-                      <TableCell
-                        className={`text-right font-mono font-medium ${
-                          item.type === "ingreso"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
-                      >
+                      <TableCell className="text-right font-mono font-semibold text-foreground">
                         {item.type === "ingreso" ? "+" : "-"}
                         {formatCurrency(item.amount)}
                       </TableCell>
@@ -509,10 +500,10 @@ export default function CuentasPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-red-500 hover:text-red-700 text-xs h-7 px-2"
+                            className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={() => handleDeleteEntry(item.id)}
                           >
-                            Eliminar
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}
                       </TableCell>
@@ -522,8 +513,8 @@ export default function CuentasPage() {
               </Table>
             </div>
           )}
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
 
       {/* ═══════════════════════════════════════ */}
       {/* DIALOGS                                */}
@@ -548,6 +539,8 @@ export default function CuentasPage() {
         accountId={ACCOUNT_ID}
         bankAccounts={activeAccounts.map((a) => ({ id: a.id, name: a.name }))}
       />
+      {ConfirmDeleteAccountDialog}
+      {ConfirmDeleteEntryDialog}
     </div>
   );
 }

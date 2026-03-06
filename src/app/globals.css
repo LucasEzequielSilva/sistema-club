@@ -47,80 +47,119 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+/* ─── OpenCode — light grayscale + orange accent only ───────────────────────
+   Philosophy: achromatic. No blues, no greens in chrome.
+   Only orange (#f97316) breaks the gray scale — on CTAs and active states.
+   Everything else: white → #fafafa → #f4f4f5 → #e4e4e7 → #71717a → #18181b
+──────────────────────────────────────────────────────────────────────────── */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
+  color-scheme: light;
+  --radius: 0.45rem;
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /* ── Grayscale surfaces ────────────────────────────────────────────────── */
+  --background:           oklch(0.985 0 0);       /* #fafafa */
+  --foreground:           oklch(0.13 0 0);         /* #18181b */
+
+  --card:                 oklch(1 0 0);            /* #ffffff */
+  --card-foreground:      oklch(0.13 0 0);
+
+  --popover:              oklch(1 0 0);
+  --popover-foreground:   oklch(0.13 0 0);
+
+  /* ── Orange — the only accent ──────────────────────────────────────────── */
+  --primary:              oklch(0.70 0.19 42);     /* #f97316 */
+  --primary-foreground:   oklch(1 0 0);
+
+  --secondary:            oklch(0.96 0 0);         /* #f4f4f5 */
+  --secondary-foreground: oklch(0.13 0 0);
+
+  --muted:                oklch(0.96 0 0);         /* #f4f4f5 */
+  --muted-foreground:     oklch(0.50 0 0);         /* #71717a */
+
+  --accent:               oklch(0.94 0 0);         /* #e9e9eb */
+  --accent-foreground:    oklch(0.13 0 0);
+
+  --destructive:          oklch(0.577 0.22 27);
+  --border:               oklch(0.90 0 0);         /* #e4e4e7 */
+  --input:                oklch(0.90 0 0);
+  --ring:                 oklch(0.70 0.19 42);     /* orange ring */
+
+  /* ── Semantic tokens — tinted but mostly gray ─────────────────────────── */
+  --success:                  oklch(0.52 0.16 145);
+  --success-foreground:       oklch(1 0 0);
+  --success-muted:            oklch(0.95 0.04 145);
+  --success-muted-foreground: oklch(0.38 0.13 145);
+
+  --warning:                  oklch(0.70 0.19 42);
+  --warning-foreground:       oklch(1 0 0);
+  --warning-muted:            oklch(0.96 0.06 65);
+  --warning-muted-foreground: oklch(0.48 0.15 55);
+
+  --danger:                   oklch(0.577 0.22 27);
+  --danger-foreground:        oklch(1 0 0);
+  --danger-muted:             oklch(0.96 0.04 27);
+  --danger-muted-foreground:  oklch(0.44 0.18 27);
+
+  --info:                     oklch(0.52 0.16 240);
+  --info-foreground:          oklch(1 0 0);
+  --info-muted:               oklch(0.95 0.04 240);
+  --info-muted-foreground:    oklch(0.38 0.13 240);
+
+  --money:                    oklch(0.52 0.16 145);
+  --money-muted-foreground:   oklch(0.38 0.13 145);
+
+  /* ── Charts — muted palette ───────────────────────────────────────────── */
+  --chart-1: oklch(0.70 0.19 42);   /* orange — primary */
+  --chart-2: oklch(0.50 0 0);       /* gray */
+  --chart-3: oklch(0.52 0.16 145);  /* green — secondary only */
+  --chart-4: oklch(0.577 0.22 27);  /* red */
+  --chart-5: oklch(0.65 0 0);       /* light gray */
+
+  /* ── Sidebar — white with subtle separator ────────────────────────────── */
+  --sidebar:                  oklch(0.98 0 0);     /* near-white panel */
+  --sidebar-foreground:       oklch(0.20 0 0);
+  --sidebar-primary:          oklch(0.70 0.19 42); /* orange active */
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent:           oklch(0.93 0 0);     /* hover gray */
+  --sidebar-accent-foreground: oklch(0.13 0 0);
+  --sidebar-border:           oklch(0.90 0 0);
+  --sidebar-ring:             oklch(0.70 0.19 42);
 }
 
 @layer base {
+  html {
+    color-scheme: light;
+  }
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Scrollbar — thin, gray */
+  ::-webkit-scrollbar       { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: oklch(0.82 0 0); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: oklch(0.70 0 0); }
+
+  /* POS — Celebración primera venta del día */
+  @keyframes celebration-pulse {
+    0%   { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.70 0.19 42 / 0.4); }
+    50%  { transform: scale(1.15); box-shadow: 0 0 0 16px oklch(0.70 0.19 42 / 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 oklch(0.70 0.19 42 / 0); }
+  }
+  .first-sale-of-day {
+    animation: celebration-pulse 0.6s ease-out;
+    border-radius: 50%;
+    display: inline-flex;
+  }
+
+  /* Onboarding — confetti rain */
+  @keyframes confettiFall {
+    0%   { transform: translateY(-20px) rotate(0deg) scale(1); opacity: 1; }
+    80%  { opacity: 1; }
+    100% { transform: translateY(110vh) rotate(600deg) scale(0.6); opacity: 0; }
   }
 }

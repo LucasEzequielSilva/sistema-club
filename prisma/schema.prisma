@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ============================================================
@@ -53,6 +53,9 @@ model Account {
   // Invoicing
   afipConfig        AfipConfig?
   invoices          Invoice[]
+
+  // AI Memory
+  memories          UserMemory[]
 
   @@map("accounts")
 }
@@ -552,4 +555,22 @@ model Invoice {
 
   @@unique([accountId, invoiceType, puntoVenta, invoiceNumber])
   @@map("invoices")
+}
+
+// ============================================================
+// CLUBI — Memoria del asistente IA
+// ============================================================
+
+model UserMemory {
+  id          String   @id @default(cuid())
+  accountId   String
+  category    String   // negocio | productos | preferencias | contexto | finanzas
+  content     String   // el hecho en lenguaje natural
+  source      String   @default("auto") // auto | manual
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("user_memories")
 }

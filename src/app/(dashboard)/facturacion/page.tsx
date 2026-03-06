@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Tabs,
@@ -20,7 +19,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { Receipt, MoreHorizontal } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { InvoiceDialog } from "./components/invoice-dialog";
 import { AfipConfigForm } from "./components/afip-config-form";
 import { InvoiceDetail } from "./components/invoice-detail";
@@ -91,31 +101,56 @@ export default function FacturacionPage() {
   const invoiceTypeBadge = (type: number) => {
     switch (type) {
       case 1:
-        return <Badge className="bg-blue-100 text-blue-800">A</Badge>;
+        return (
+          <Badge
+            className="text-xs font-semibold"
+            style={{ backgroundColor: "var(--info-muted)", color: "var(--info-muted-foreground)", border: "none" }}
+          >
+            A
+          </Badge>
+        );
       case 6:
-        return <Badge className="bg-green-100 text-green-800">B</Badge>;
+        return (
+          <Badge
+            className="text-xs font-semibold"
+            style={{ backgroundColor: "var(--success-muted)", color: "var(--success-muted-foreground)", border: "none" }}
+          >
+            B
+          </Badge>
+        );
       case 11:
-        return <Badge className="bg-purple-100 text-purple-800">C</Badge>;
+        return (
+          <Badge
+            className="text-xs font-semibold"
+            style={{ backgroundColor: "var(--warning-muted)", color: "var(--warning-muted-foreground)", border: "none" }}
+          >
+            C
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{type}</Badge>;
     }
   };
 
+  const pageActions = (
+    <Button onClick={() => setShowCreate(true)} size="sm">
+      + Nueva Factura
+    </Button>
+  );
+
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Facturacion Electronica</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            Emision de comprobantes via AFIP
-          </p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Facturación"
+        description="Comprobantes electrónicos AFIP"
+        icon={Receipt}
+        actions={pageActions}
+      />
 
       <Tabs defaultValue="facturas">
-        <TabsList>
+        <TabsList className="mb-2">
           <TabsTrigger value="facturas">Facturas</TabsTrigger>
-          <TabsTrigger value="config">Configuracion AFIP</TabsTrigger>
+          <TabsTrigger value="config">Configuración AFIP</TabsTrigger>
         </TabsList>
 
         {/* ── TAB: Facturas ── */}
@@ -123,54 +158,49 @@ export default function FacturacionPage() {
           {/* Summary cards */}
           {summary && (
             <div className="grid grid-cols-4 gap-4">
-              <div className="bg-white rounded-lg border p-4">
-                <div className="text-xs text-gray-500 uppercase">
-                  Total Facturado
-                </div>
-                <div className="text-xl font-bold mt-1">
-                  {formatCurrency(summary.totalFacturado)}
-                </div>
-              </div>
-              <div className="bg-white rounded-lg border p-4">
-                <div className="text-xs text-gray-500 uppercase">
-                  Neto Gravado
-                </div>
-                <div className="text-xl font-bold mt-1">
-                  {formatCurrency(summary.totalNeto)}
-                </div>
-              </div>
-              <div className="bg-white rounded-lg border p-4">
-                <div className="text-xs text-gray-500 uppercase">IVA</div>
-                <div className="text-xl font-bold mt-1">
-                  {formatCurrency(summary.totalIva)}
-                </div>
-              </div>
-              <div className="bg-white rounded-lg border p-4">
-                <div className="text-xs text-gray-500 uppercase">
-                  Comprobantes
-                </div>
-                <div className="text-xl font-bold mt-1">{summary.count}</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {summary.countA > 0 && `A: ${summary.countA} `}
-                  {summary.countB > 0 && `B: ${summary.countB} `}
-                  {summary.countC > 0 && `C: ${summary.countC}`}
-                </div>
-              </div>
+              <StatCard
+                title="Total Facturado"
+                value={formatCurrency(summary.totalFacturado)}
+                variant="default"
+              />
+              <StatCard
+                title="Neto Gravado"
+                value={formatCurrency(summary.totalNeto)}
+                variant="success"
+              />
+              <StatCard
+                title="IVA"
+                value={formatCurrency(summary.totalIva)}
+                variant="muted"
+              />
+              <StatCard
+                title="Comprobantes"
+                value={String(summary.count)}
+                subtitle={[
+                  summary.countA > 0 ? `A: ${summary.countA}` : null,
+                  summary.countB > 0 ? `B: ${summary.countB}` : null,
+                  summary.countC > 0 ? `C: ${summary.countC}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+                variant="info"
+              />
             </div>
           )}
 
-          {/* Filters + New button */}
-          <div className="flex items-center gap-3">
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border">
             <Input
               placeholder="Buscar por cliente, documento o CAE..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="max-w-xs"
+              className="max-w-xs h-8"
             />
             <div className="flex gap-1">
               <Button
                 variant={typeFilter === null ? "default" : "outline"}
                 size="sm"
+                className="h-8"
                 onClick={() => setTypeFilter(null)}
               >
                 Todas
@@ -178,6 +208,7 @@ export default function FacturacionPage() {
               <Button
                 variant={typeFilter === 1 ? "default" : "outline"}
                 size="sm"
+                className="h-8"
                 onClick={() => setTypeFilter(1)}
               >
                 Fact. A
@@ -185,6 +216,7 @@ export default function FacturacionPage() {
               <Button
                 variant={typeFilter === 6 ? "default" : "outline"}
                 size="sm"
+                className="h-8"
                 onClick={() => setTypeFilter(6)}
               >
                 Fact. B
@@ -192,51 +224,51 @@ export default function FacturacionPage() {
               <Button
                 variant={typeFilter === 11 ? "default" : "outline"}
                 size="sm"
+                className="h-8"
                 onClick={() => setTypeFilter(11)}
               >
                 Fact. C
               </Button>
             </div>
-            <div className="flex-1" />
-            <Button onClick={() => setShowCreate(true)}>
-              + Nueva Factura
-            </Button>
           </div>
 
           {/* Invoice table */}
           {loading ? (
-            <div className="py-12 text-center text-gray-400">
+            <div className="py-12 text-center text-muted-foreground">
               Cargando facturas...
             </div>
           ) : invoices.length === 0 ? (
-            <div className="py-12 text-center text-gray-400">
-              No hay facturas emitidas.
-              <br />
-              <span className="text-sm">
-                Configura AFIP y emiti tu primer comprobante.
-              </span>
+            <div className="rounded-xl border border-border bg-card">
+              <EmptyState
+                icon={Receipt}
+                title="No hay facturas emitidas"
+                description="Configurá AFIP y emití tu primer comprobante electrónico."
+                actionLabel="+ Nueva Factura"
+                onAction={() => setShowCreate(true)}
+              />
             </div>
           ) : (
-            <div className="rounded-lg border overflow-hidden">
+            <div className="rounded-xl border border-border overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-16">Tipo</TableHead>
-                    <TableHead>Numero</TableHead>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Cliente</TableHead>
-                    <TableHead className="text-right">Neto</TableHead>
-                    <TableHead className="text-right">IVA</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead>CAE</TableHead>
-                    <TableHead>Venta</TableHead>
+                    <TableHead className="w-16 text-xs uppercase text-muted-foreground">Tipo</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Número</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Cliente</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Neto</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">IVA</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Total</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">CAE</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Venta</TableHead>
+                    <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {invoices.map((inv: Invoice) => (
                     <TableRow
                       key={inv.id}
-                      className="cursor-pointer hover:bg-gray-50"
+                      className="cursor-pointer hover:bg-muted/40"
                       onClick={() => setDetailId(inv.id)}
                     >
                       <TableCell>{invoiceTypeBadge(inv.invoiceType)}</TableCell>
@@ -247,41 +279,70 @@ export default function FacturacionPage() {
                       <TableCell>
                         {inv.customerName || inv.docTipoName}
                         {inv.docNro !== "0" && (
-                          <span className="text-xs text-gray-400 ml-1">
+                          <span className="text-xs text-muted-foreground ml-1">
                             ({inv.docNro})
                           </span>
                         )}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-right font-mono font-semibold text-foreground">
                         {formatCurrency(inv.netAmount)}
                       </TableCell>
-                      <TableCell className="text-right font-mono">
+                      <TableCell className="text-right font-mono text-muted-foreground">
                         {inv.ivaAmount > 0
                           ? formatCurrency(inv.ivaAmount)
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-right font-mono font-medium">
+                      <TableCell className="text-right font-mono font-semibold text-foreground">
                         {formatCurrency(inv.totalAmount)}
                       </TableCell>
                       <TableCell>
                         {inv.cae ? (
-                          <span className="font-mono text-xs text-green-700">
+                          <span
+                            className="font-mono text-xs"
+                            style={{ color: "var(--success-muted-foreground)" }}
+                          >
                             {inv.cae}
                           </span>
                         ) : (
-                          <Badge variant="outline" className="text-red-500">
+                          <Badge
+                            variant="outline"
+                            className="text-xs"
+                            style={{
+                              borderColor: "var(--danger-muted-foreground)",
+                              color: "var(--danger-muted-foreground)",
+                            }}
+                          >
                             Sin CAE
                           </Badge>
                         )}
                       </TableCell>
                       <TableCell>
                         {inv.sale ? (
-                          <span className="text-xs text-blue-600">
+                          <span
+                            className="text-xs"
+                            style={{ color: "var(--info-muted-foreground)" }}
+                          >
                             {inv.sale.product.name}
                           </span>
                         ) : (
-                          <span className="text-xs text-gray-400">Manual</span>
+                          <span className="text-xs text-muted-foreground">Manual</span>
                         )}
+                      </TableCell>
+                      <TableCell
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setDetailId(inv.id)}>
+                              Ver detalle
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -293,7 +354,9 @@ export default function FacturacionPage() {
 
         {/* ── TAB: Config AFIP ── */}
         <TabsContent value="config">
-          <AfipConfigForm accountId={ACCOUNT_ID} />
+          <div className="rounded-xl border border-border bg-card p-5">
+            <AfipConfigForm accountId={ACCOUNT_ID} />
+          </div>
         </TabsContent>
       </Tabs>
 

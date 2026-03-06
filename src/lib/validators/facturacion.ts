@@ -5,7 +5,7 @@ import { z } from "zod";
 // ============================================================
 
 export const saveAfipConfigSchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   cuit: z
     .string()
     .min(11, "CUIT debe tener 11 digitos")
@@ -23,7 +23,7 @@ export const saveAfipConfigSchema = z.object({
 // ============================================================
 
 export const createInvoiceSchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   saleId: z.string().cuid("Invalid sale ID").optional().nullable(),
 
   // AFIP fields

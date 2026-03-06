@@ -1,0 +1,265 @@
+import { NextRequest } from "next/server";
+import Groq from "groq-sdk";
+import { db } from "@/server/db";
+
+export const runtime = "nodejs";
+
+const ACCOUNT_ID = "test-account-id";
+
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
+
+// ─── Contexto del negocio desde la DB ───────────────────────────────────────
+async function getBusinessContext() {
+  try {
+    const [products, categoryList, paymentMethods, suppliers, salesCount, purchasesCount] =
+      await Promise.all([
+        db.product.count({ where: { isActive: true } }),
+        db.productCategory.findMany({
+          where: { accountId: ACCOUNT_ID, isActive: true },
+          select: { name: true },
+          orderBy: { name: "asc" },
+        }),
+        db.paymentMethod.count({ where: { isActive: true } }),
+        db.supplier.count({ where: { isActive: true } }),
+        db.sale.count(),
+        db.purchase.count(),
+      ]);
+    const catNames = categoryList.map((c) => c.name).join(", ");
+    const catCount = categoryList.length;
+    return [
+      `NEGOCIO ACTUAL: ${products} productos | ${catCount} categorías (${catNames}) | ${paymentMethods} métodos de pago | ${suppliers} proveedores | ${salesCount} ventas | ${purchasesCount} compras${salesCount === 0 ? " — SIN DATOS AÚN" : ""}`,
+      `CATEGORÍAS DISPONIBLES PARA PRODUCTOS: ${catNames || "ninguna"}`,
+    ].join("\n");
+  } catch {
+    return "";
+  }
+}
+
+// ─── Cargar memorias del usuario ─────────────────────────────────────────────
+async function loadMemories(): Promise<string> {
+  try {
+    const memories = await db.userMemory.findMany({
+      where: { accountId: ACCOUNT_ID },
+      orderBy: { updatedAt: "desc" },
+      take: 40,
+    });
+    if (!memories.length) return "";
+    const grouped = memories.reduce<Record<string, string[]>>((acc, m) => {
+      acc[m.category] = acc[m.category] || [];
+      acc[m.category].push(m.content);
+      return acc;
+    }, {});
+    const lines = Object.entries(grouped).map(
+      ([cat, items]) => `[${cat.toUpperCase()}]\n${items.map((i) => `• ${i}`).join("\n")}`
+    );
+    return `\nLO QUE SÉ DEL USUARIO (memorias):\n${lines.join("\n\n")}`;
+  } catch {
+    return "";
+  }
+}
+
+// ─── Auto-extraer y guardar memorias post-conversación ───────────────────────
+async function extractAndSaveMemories(
+  userMessage: string,
+  assistantResponse: string
+) {
+  try {
+    const extraction = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      messages: [
+        {
+          role: "system",
+          content: `Sos un extractor de hechos. Dado un intercambio de chat, extraé hechos concretos y útiles sobre el USUARIO o su NEGOCIO que valga la pena recordar a futuro.
+Devolvé SOLO un JSON válido con este formato exacto:
+{"memories": [{"category": "negocio|productos|preferencias|finanzas|contexto", "content": "hecho concreto en una oración"}]}
+Si no hay nada relevante, devolvé: {"memories": []}
+No incluyas información trivial, saludos, ni cosas que ya son obvias del sistema.`,
+        },
+        {
+          role: "user",
+          content: `Usuario dijo: "${userMessage}"\nAsistente respondió: "${assistantResponse.slice(0, 500)}"`,
+        },
+      ],
+      max_tokens: 300,
+      temperature: 0.1,
+    });
+
+    const raw = extraction.choices[0]?.message?.content?.trim() || "{}";
+    // Extraer JSON aunque venga con texto alrededor
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) return;
+
+    const parsed = JSON.parse(match[0]);
+    const memories: Array<{ category: string; content: string }> = parsed.memories || [];
+
+    for (const mem of memories) {
+      if (!mem.category || !mem.content) continue;
+      // Evitar duplicados similares (comparación simple)
+      const existing = await db.userMemory.findFirst({
+        where: {
+          accountId: ACCOUNT_ID,
+          content: { contains: mem.content.slice(0, 30) },
+        },
+      });
+      if (!existing) {
+        await db.userMemory.create({
+          data: {
+            accountId: ACCOUNT_ID,
+            category: mem.category,
+            content: mem.content,
+            source: "auto",
+          },
+        });
+      }
+    }
+  } catch {
+    // Silencioso — no debe romper el flujo principal
+  }
+}
+
+const SYSTEM_PROMPT = `Sos el asistente de IA de "Sistema Club", una app de gestión financiera para pymes argentinas.
+Tu nombre es **Clubi**. Hablás en argentino relajado, directo, como un contador amigo. Sin frases hechas.
+
+MÓDULOS:
+- Tablero: KPIs del negocio
+- Ventas / Compras: registrar ingresos y egresos con pagos parciales
+- Punto de Venta: venta rápida tipo caja
+- Finanzas: Resumen, Cashflow semanal, Cuadro KPIs, Estados de resultados, Cuentas
+- Configuración: Productos (con costos y precios), Proveedores, Clasificaciones, Mercadería, Facturación AFIP
+
+REGLAS CLAVE:
+- Stock PEPS (FIFO). Precio = costo × (1 + markup%)
+- IVA: RI discrimina, Monotributista incluido en precio
+- Pagos con fecha de acreditación automática por método
+- Máx 2 pagos por compra
+
+TU ROL: onboarding, ayuda contextual, insights del negocio, chat libre.
+Sé conciso (3-4 párrafos máx). Usá viñetas. Respondé siempre en español rioplatense.
+Si el usuario comparte info de su negocio, confirmá que lo recordaste diciendo "📌 Anotado".
+
+ACCIONES QUE PODÉS EJECUTAR:
+Cuando el usuario pide EXPLÍCITAMENTE crear algo o navegar a una sección, podés hacerlo directamente.
+Al FINAL de tu respuesta (después de todo el texto), incluí este bloque — el usuario no lo verá, el sistema lo ejecutará automáticamente:
+
+Crear producto:
+<accion>{"tipo":"crear_producto","nombre":"Nombre exacto","costo":0,"precio_venta":0,"categoria":"Nombre exacto de categoría","unidad":"unidad"}</accion>
+
+Navegar a una sección:
+<accion>{"tipo":"navegar","ruta":"/ventas"}</accion>
+
+Rutas válidas para navegar: /tablero, /ventas, /compras, /pos, /productos, /proveedores, /mercaderia, /cuentas, /clasificaciones, /cashflow, /resumen, /estados-resultados, /cuadro-resumen
+
+Unidades válidas para productos: "unidad", "kg", "litro", "metro", "par"
+Usá siempre el nombre exacto de una de las CATEGORÍAS DISPONIBLES (inyectadas en el contexto).
+Si el usuario no especificó costo, usá 0. Si no especificó precio, usá 0.
+
+REGLAS DE ACCIONES:
+- Solo incluí el bloque <accion> si el usuario pidió EXPLÍCITAMENTE crear algo ("agregame", "creá", "añadí") o navegar ("llevame a", "abrí", "ir a", "mostrame")
+- NUNCA lo incluyas si solo estás explicando cómo se hace
+- El bloque va siempre al FINAL, después de todo el texto
+- Una sola acción por respuesta
+- Después de ejecutar, el sistema te devolverá el resultado — confirmalo brevemente`;
+
+
+// ─── POST /api/chat ──────────────────────────────────────────────────────────
+export async function POST(req: NextRequest) {
+  try {
+    const { messages, currentPage } = await req.json();
+
+    if (!process.env.GROQ_API_KEY) {
+      return new Response(
+        JSON.stringify({ error: "Configurá GROQ_API_KEY en el .env (gratis en console.groq.com)" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const [businessContext, memoriesContext] = await Promise.all([
+      getBusinessContext(),
+      loadMemories(),
+    ]);
+
+    const systemFull = [
+      SYSTEM_PROMPT,
+      businessContext,
+      memoriesContext,
+      currentPage ? `PÁGINA ACTUAL: ${currentPage}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    // ── Streaming response ──
+    const stream = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [{ role: "system", content: systemFull }, ...messages],
+      stream: true,
+      max_tokens: 1024,
+      temperature: 0.7,
+    });
+
+    let fullResponse = "";
+    const encoder = new TextEncoder();
+
+    const readable = new ReadableStream({
+      async start(controller) {
+        for await (const chunk of stream) {
+          const text = chunk.choices[0]?.delta?.content || "";
+          if (text) {
+            fullResponse += text;
+            controller.enqueue(encoder.encode(text));
+          }
+        }
+        controller.close();
+
+        // ── Post-stream: extraer memorias en background ──
+        const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
+        if (lastUserMsg && fullResponse) {
+          extractAndSaveMemories(lastUserMsg.content, fullResponse).catch(() => {});
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Transfer-Encoding": "chunked",
+      },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Error desconocido";
+    return new Response(JSON.stringify({ error: message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+// ─── GET /api/chat — listar memorias ─────────────────────────────────────────
+export async function GET() {
+  try {
+    const memories = await db.userMemory.findMany({
+      where: { accountId: ACCOUNT_ID },
+      orderBy: { createdAt: "desc" },
+    });
+    return new Response(JSON.stringify(memories), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return new Response(JSON.stringify([]), {
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+// ─── DELETE /api/chat?id=xxx — borrar memoria ────────────────────────────────
+export async function DELETE(req: NextRequest) {
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return new Response("Missing id", { status: 400 });
+  try {
+    await db.userMemory.delete({ where: { id } });
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
+}

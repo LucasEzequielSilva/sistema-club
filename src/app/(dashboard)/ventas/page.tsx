@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { SaleDialog } from "./components/sale-dialog";
 import { SaleDetail } from "./components/sale-detail";
 import { toast } from "sonner";
+import { TrendingUp, Receipt, CheckCircle2, Clock, Percent, MoreHorizontal, Loader2 } from "lucide-react";
+import { useConfirm } from "@/hooks/use-confirm";
+import { StatCard } from "@/components/shared/stat-card";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
 
 const ACCOUNT_ID = "test-account-id";
 
@@ -82,6 +94,30 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   },
 };
 
+// Semantic badge styles using CSS variables
+const STATUS_BADGE_STYLE: Record<string, React.CSSProperties> = {
+  pending: {
+    backgroundColor: "var(--warning-muted)",
+    color: "var(--warning-muted-foreground)",
+    borderColor: "var(--warning-muted-foreground)",
+  },
+  partial: {
+    backgroundColor: "var(--info-muted)",
+    color: "var(--info-muted-foreground)",
+    borderColor: "var(--info-muted-foreground)",
+  },
+  paid: {
+    backgroundColor: "var(--success-muted)",
+    color: "var(--success-muted-foreground)",
+    borderColor: "var(--success-muted-foreground)",
+  },
+  overdue: {
+    backgroundColor: "var(--danger-muted)",
+    color: "var(--danger-muted-foreground)",
+    borderColor: "var(--danger-muted-foreground)",
+  },
+};
+
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -105,6 +141,7 @@ function toInputDate(d: Date | null): string {
 }
 
 export default function VentasPage() {
+  const router = useRouter();
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +155,13 @@ export default function VentasPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  const [confirmDelete, ConfirmDialog] = useConfirm({
+    title: "Eliminar venta",
+    description: "Se revertirá el movimiento de stock. Esta acción no se puede deshacer.",
+    confirmLabel: "Eliminar",
+    destructive: true,
+  });
 
   const loadSales = useCallback(async () => {
     setLoading(true);
@@ -155,12 +199,7 @@ export default function VentasPage() {
   }, [loadSales]);
 
   const handleDelete = async (id: string) => {
-    if (
-      !confirm(
-        "¿Eliminar esta venta? Se revertirá el movimiento de stock. Esta acción no se puede deshacer."
-      )
-    )
-      return;
+    if (!(await confirmDelete())) return;
     try {
       await trpc.ventas.delete.mutate({ id });
       toast.success("Venta eliminada");
@@ -254,36 +293,77 @@ export default function VentasPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Ventas</h1>
-          <p className="text-gray-500 mt-1">
-            {loading
-              ? "Cargando..."
-              : `${sales.length} venta${sales.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportCSV} disabled={sales.length === 0}>
-            Exportar CSV
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingId(null);
-              setShowDialog(true);
-            }}
-          >
-            + Nueva Venta
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <PageHeader
+        title="Ventas"
+        description="Registro de ingresos"
+        icon={TrendingUp}
+          actions={
+          <>
+            <Button
+              variant={statusFilter === "pending" ? "default" : "outline"}
+              className={statusFilter === "pending" ? "" : ""}
+              onClick={() => setStatusFilter(statusFilter === "pending" ? "all" : "pending")}
+            >
+              <Clock className="w-3.5 h-3.5 mr-1.5" />
+              Cobros pendientes
+            </Button>
+            <Button variant="outline" onClick={exportCSV} disabled={sales.length === 0}>
+              Exportar CSV
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingId(null);
+                setShowDialog(true);
+              }}
+            >
+              + Nueva Venta
+            </Button>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
+      {/* Summary KPI Cards */}
+      {summary && (
+        <div className="grid grid-cols-5 gap-3">
+          <StatCard
+            title="Total Facturado"
+            value={formatCurrency(summary.totalSales)}
+            icon={TrendingUp}
+            variant="default"
+          />
+          <StatCard
+            title="Contribución Marginal"
+            value={formatCurrency(summary.totalCM)}
+            icon={Percent}
+            variant="success"
+          />
+          <StatCard
+            title="Cobrado"
+            value={formatCurrency(summary.totalPaid)}
+            icon={CheckCircle2}
+            variant="success"
+          />
+          <StatCard
+            title="Pendiente de Cobro"
+            value={formatCurrency(summary.totalPending)}
+            icon={Clock}
+            variant="warning"
+          />
+          <StatCard
+            title="Ticket Promedio"
+            value={formatCurrency(summary.avgTicket)}
+            subtitle={`${summary.countSales} ventas | ${summary.countInvoiced} facturadas`}
+            icon={Receipt}
+            variant="default"
+          />
+        </div>
+      )}
+
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Desde:</span>
+          <span className="text-sm text-muted-foreground">Desde:</span>
           <Input
             type="date"
             value={dateFrom}
@@ -292,7 +372,7 @@ export default function VentasPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Hasta:</span>
+          <span className="text-sm text-muted-foreground">Hasta:</span>
           <Input
             type="date"
             value={dateTo}
@@ -321,73 +401,79 @@ export default function VentasPage() {
         )}
       </div>
 
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-5 gap-3">
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Total Facturado</p>
-            <p className="text-lg font-bold">{formatCurrency(summary.totalSales)}</p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Contribución Marginal</p>
-            <p className="text-lg font-bold text-green-600">
-              {formatCurrency(summary.totalCM)}
-            </p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Cobrado</p>
-            <p className="text-lg font-bold">{formatCurrency(summary.totalPaid)}</p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Pendiente de Cobro</p>
-            <p className="text-lg font-bold text-amber-600">
-              {formatCurrency(summary.totalPending)}
-            </p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Ticket Promedio</p>
-            <p className="text-lg font-bold">{formatCurrency(summary.avgTicket)}</p>
-            <p className="text-[10px] text-gray-400">
-              {summary.countSales} ventas | {summary.countInvoiced} facturadas
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Table */}
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Cargando...</div>
-      ) : sales.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          {hasFilters
-            ? "Sin resultados para los filtros aplicados"
-            : "No hay ventas. Registrá una para comenzar."}
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="bg-muted/30 px-4 py-3 border-b border-border">
+            <div className="grid grid-cols-10 gap-3 animate-pulse">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="h-3 bg-muted rounded" />
+              ))}
+            </div>
+          </div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-10 gap-3 px-4 py-3 border-b border-border last:border-0 animate-pulse">
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-3 w-28 bg-muted rounded" />
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-3 w-16 bg-muted rounded" />
+              <div className="h-3 w-8 bg-muted rounded mx-auto" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-5 w-14 bg-muted rounded mx-auto" />
+              <div className="h-3 w-6 bg-muted rounded ml-auto" />
+            </div>
+          ))}
         </div>
+      ) : sales.length === 0 ? (
+        hasFilters ? (
+          <div className="rounded-xl border border-border bg-card">
+            <EmptyState
+              icon={TrendingUp}
+              title="Sin resultados"
+              description="No se encontraron ventas para los filtros aplicados."
+              actionLabel="Limpiar filtros"
+              onAction={clearFilters}
+            />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card">
+            <EmptyState
+              icon={TrendingUp}
+              title="Tu primera venta te espera"
+              description="Registrá ventas desde acá o usá el Punto de Venta para hacerlo rápido."
+              actionLabel="Ir al Punto de Venta"
+              onAction={() => router.push("/pos")}
+            />
+          </div>
+        )
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Producto</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead className="text-center">Cant.</TableHead>
-                <TableHead className="text-right">Subtotal</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">CM</TableHead>
-                <TableHead className="text-center">Estado</TableHead>
-                <TableHead className="text-center">Fact.</TableHead>
-                <TableHead className="text-right">Acciones</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Producto</TableHead>
+                <TableHead className="text-xs uppercase text-muted-foreground">Cliente</TableHead>
+                <TableHead className="text-center text-xs uppercase text-muted-foreground">Cant.</TableHead>
+                <TableHead className="text-right text-xs uppercase text-muted-foreground">Subtotal</TableHead>
+                <TableHead className="text-right text-xs uppercase text-muted-foreground">Total</TableHead>
+                <TableHead className="text-right text-xs uppercase text-muted-foreground">CM</TableHead>
+                <TableHead className="text-center text-xs uppercase text-muted-foreground">Estado</TableHead>
+                <TableHead className="text-center text-xs uppercase text-muted-foreground">Fact.</TableHead>
+                <TableHead className="text-right text-xs uppercase text-muted-foreground">Acciones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sales.map((s) => {
+                const badgeStyle = STATUS_BADGE_STYLE[s.status] || STATUS_BADGE_STYLE.pending;
                 const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.pending;
                 return (
-                  <TableRow key={s.id}>
+                  <TableRow key={s.id} className="hover:bg-muted/40">
                     <TableCell className="text-sm">
                       <div
-                        className="cursor-pointer hover:underline"
+                        className="cursor-pointer hover:underline text-foreground"
                         onClick={() => setDetailId(s.id)}
                       >
                         {formatDate(s.saleDate)}
@@ -398,70 +484,66 @@ export default function VentasPage() {
                         className="cursor-pointer hover:underline"
                         onClick={() => setDetailId(s.id)}
                       >
-                        <span className="font-medium">{s.product.name}</span>
-                        <div className="text-xs text-gray-400">
+                        <span className="font-medium text-foreground">{s.product.name}</span>
+                        <div className="text-xs text-muted-foreground">
                           {s.origin === "mayorista" ? "Mayorista" : "Minorista"}
                           {s.priceList && ` | ${s.priceList.name}`}
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-gray-500 text-sm">
+                    <TableCell className="text-muted-foreground text-sm">
                       {s.client?.name || "—"}
                     </TableCell>
-                    <TableCell className="text-center font-mono text-sm">
+                    <TableCell className="text-center font-mono text-sm text-foreground">
                       {s.quantity}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
+                    <TableCell className="text-right font-mono text-sm text-foreground">
                       {formatCurrency(s.subtotal)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm font-medium">
+                    <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
                       {formatCurrency(s.total)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
-                      <span
-                        className={
-                          s.marginPct < 20
-                            ? "text-red-500"
-                            : s.marginPct < 30
-                              ? "text-amber-500"
-                              : "text-green-600"
-                        }
-                      >
-                        {formatCurrency(s.contributionMargin)}
-                      </span>
+                    <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
+                      {formatCurrency(s.contributionMargin)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.className}`}
+                        className="inline-block px-2 py-0.5 rounded-full text-xs font-medium border"
+                        style={badgeStyle}
                       >
                         {cfg.label}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center text-foreground">
                       {s.invoiced ? (
-                        <span className="text-green-600">&#10003;</span>
+                        <span style={{ color: "var(--success-muted-foreground)" }}>&#10003;</span>
                       ) : (
-                        <span className="text-gray-400">&#10007;</span>
+                        <span className="text-muted-foreground">&#10007;</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex gap-1 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDetailId(s.id)}
-                        >
-                          Ver
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-500 border-red-300 hover:bg-red-50"
-                          onClick={() => handleDelete(s.id)}
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Abrir menú</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setDetailId(s.id)}>
+                            Ver detalle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setDetailId(s.id)}>
+                            Agregar cobro
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(s.id)}
+                          >
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 );
@@ -482,6 +564,7 @@ export default function VentasPage() {
         accountId={ACCOUNT_ID}
         editingId={editingId}
       />
+      {ConfirmDialog}
     </div>
   );
 }

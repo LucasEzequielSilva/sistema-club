@@ -5,7 +5,7 @@ import { z } from "zod";
 // ============================================================
 
 export const createPurchaseSchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   supplierId: z.string().cuid("Proveedor inválido").optional().nullable(),
   productId: z.string().cuid("Producto inválido").optional().nullable(),
   costCategoryId: z.string().cuid("Clasificación de costo es obligatoria"),

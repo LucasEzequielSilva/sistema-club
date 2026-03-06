@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const createSupplierSchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/lib/trpc-client";
+import { useConfirm } from "@/hooks/use-confirm";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,9 +20,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { MerchandiseEntryDialog } from "./components/entry-dialog";
 import { StockAdjustmentDialog } from "./components/adjustment-dialog";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
+import {
+  Warehouse,
+  Plus,
+  SlidersHorizontal,
+  Download,
+  PackageOpen,
+  DollarSign,
+  AlertTriangle,
+  Loader2,
+} from "lucide-react";
 
 const ACCOUNT_ID = "test-account-id";
 
@@ -62,12 +77,33 @@ const MOVEMENT_LABELS: Record<string, string> = {
   adjustment: "Ajuste",
 };
 
-const MOVEMENT_COLORS: Record<string, string> = {
-  initial: "bg-blue-100 text-blue-700 border-blue-200",
-  purchase: "bg-green-100 text-green-700 border-green-200",
-  sale: "bg-red-100 text-red-700 border-red-200",
-  merchandise_entry: "bg-purple-100 text-purple-700 border-purple-200",
-  adjustment: "bg-amber-100 text-amber-700 border-amber-200",
+// CSS-var based badge styles per movement type
+const MOVEMENT_STYLES: Record<string, React.CSSProperties> = {
+  initial: {
+    backgroundColor: "var(--color-blue-100, #dbeafe)",
+    color: "var(--color-blue-700, #1d4ed8)",
+    borderColor: "var(--color-blue-200, #bfdbfe)",
+  },
+  purchase: {
+    backgroundColor: "var(--color-green-100, #dcfce7)",
+    color: "var(--color-green-700, #15803d)",
+    borderColor: "var(--color-green-200, #bbf7d0)",
+  },
+  sale: {
+    backgroundColor: "var(--color-red-100, #fee2e2)",
+    color: "var(--color-red-700, #b91c1c)",
+    borderColor: "var(--color-red-200, #fecaca)",
+  },
+  merchandise_entry: {
+    backgroundColor: "var(--color-purple-100, #f3e8ff)",
+    color: "var(--color-purple-700, #7e22ce)",
+    borderColor: "var(--color-purple-200, #e9d5ff)",
+  },
+  adjustment: {
+    backgroundColor: "var(--color-amber-100, #fef3c7)",
+    color: "var(--color-amber-700, #b45309)",
+    borderColor: "var(--color-amber-200, #fde68a)",
+  },
 };
 
 function formatCurrency(n: number) {
@@ -89,6 +125,13 @@ function formatDate(d: Date | string) {
 type ViewMode = "movements" | "stock";
 
 export default function MercaderiaPage() {
+  const [confirmDeleteMovement, ConfirmDeleteMovementDialog] = useConfirm({
+    title: "Eliminar movimiento",
+    description: "Se revertirá el efecto en stock. Esta acción no se puede deshacer.",
+    confirmLabel: "Eliminar",
+    destructive: true,
+  });
+
   const [viewMode, setViewMode] = useState<ViewMode>("movements");
   const [movements, setMovements] = useState<StockMovementItem[]>([]);
   const [stockSummary, setStockSummary] = useState<StockProductSummary[]>([]);
@@ -154,8 +197,7 @@ export default function MercaderiaPage() {
       toast.error("Solo se pueden eliminar ingresos y ajustes desde aquí");
       return;
     }
-    if (!confirm("¿Eliminar este movimiento? Se revertirá el efecto en stock."))
-      return;
+    if (!(await confirmDeleteMovement())) return;
     try {
       await trpc.mercaderia.deleteMovement.mutate({ id });
       toast.success("Movimiento eliminado");
@@ -244,48 +286,73 @@ export default function MercaderiaPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Mercadería y Stock</h1>
-          <p className="text-gray-500 mt-1">
-            Movimientos de stock, ingresos de mercadería y ajustes manuales
-          </p>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <PageHeader
+        title="Mercadería"
+        description="Movimientos de stock y ajustes de inventario"
+        icon={Warehouse}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={exportCSV}>
+              <Download className="w-4 h-4 mr-1.5" />
+              Exportar CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowAdjustmentDialog(true)}>
+              <SlidersHorizontal className="w-4 h-4 mr-1.5" />
+              Ajuste de Stock
+            </Button>
+            <Button size="sm" onClick={() => setShowEntryDialog(true)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Nuevo Ingreso
+            </Button>
+          </div>
+        }
+      />
+
+      {/* Summary cards — always visible when stock data available */}
+      {stockTotals && (
+        <div className="grid grid-cols-3 gap-4">
+          <StatCard
+            title="Productos"
+            value={stockTotals.totalProducts}
+            subtitle="productos activos"
+            icon={PackageOpen}
+            variant="info"
+          />
+          <StatCard
+            title="Stock Valorizado"
+            value={formatCurrency(stockTotals.totalValued)}
+            subtitle="valor total de inventario"
+            icon={DollarSign}
+            variant="default"
+          />
+          <StatCard
+            title="Alertas de stock bajo"
+            value={stockTotals.lowStockCount}
+            subtitle={stockTotals.lowStockCount === 1 ? "producto bajo mínimo" : "productos bajo mínimo"}
+            icon={AlertTriangle}
+            variant={stockTotals.lowStockCount > 0 ? "warning" : "muted"}
+          />
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={exportCSV}>
-            Exportar CSV
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setShowAdjustmentDialog(true)}
-          >
-            Ajustar Stock
-          </Button>
-          <Button onClick={() => setShowEntryDialog(true)}>
-            + Ingreso Mercadería
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* View Tabs */}
-      <div className="flex gap-1 border-b">
+      <div className="flex gap-1 border-b border-border">
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             viewMode === "movements"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
           onClick={() => setViewMode("movements")}
         >
           Movimientos
         </button>
         <button
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             viewMode === "stock"
-              ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-700"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
           onClick={() => setViewMode("stock")}
         >
@@ -299,9 +366,9 @@ export default function MercaderiaPage() {
       {viewMode === "movements" && (
         <>
           {/* Filters */}
-          <div className="flex flex-wrap gap-3 items-center">
+          <div className="flex flex-wrap gap-3 items-center p-3 bg-muted/50 rounded-lg border border-border">
             <Select value={productFilter} onValueChange={setProductFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[200px] bg-background">
                 <SelectValue placeholder="Producto" />
               </SelectTrigger>
               <SelectContent>
@@ -315,7 +382,7 @@ export default function MercaderiaPage() {
             </Select>
 
             <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="w-[200px] bg-background">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
@@ -331,26 +398,26 @@ export default function MercaderiaPage() {
             </Select>
 
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Desde:</span>
+              <span className="text-sm text-muted-foreground">Desde:</span>
               <Input
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
-                className="w-[160px]"
+                className="w-[160px] bg-background"
               />
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Hasta:</span>
+              <span className="text-sm text-muted-foreground">Hasta:</span>
               <Input
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
-                className="w-[160px]"
+                className="w-[160px] bg-background"
               />
             </div>
 
             {hasFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground hover:text-foreground">
                 Limpiar filtros
               </Button>
             )}
@@ -358,25 +425,29 @@ export default function MercaderiaPage() {
 
           {/* Movements Table */}
           {loading ? (
-            <div className="text-center py-16 text-gray-400">Cargando...</div>
+            <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
           ) : movements.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              {hasFilters
-                ? "Sin resultados para los filtros aplicados"
-                : "No hay movimientos de stock registrados."}
-            </div>
+            <EmptyState
+              icon={Warehouse}
+              title={hasFilters ? "Sin resultados" : "Sin movimientos"}
+              description={
+                hasFilters
+                  ? "No hay resultados para los filtros aplicados"
+                  : "No hay movimientos de stock registrados"
+              }
+            />
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border border-border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Cantidad</TableHead>
-                    <TableHead className="text-right">Costo Unit.</TableHead>
-                    <TableHead>Notas</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Producto</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Cantidad</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Costo Unit.</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Notas</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -385,22 +456,24 @@ export default function MercaderiaPage() {
                       m.movementType === "merchandise_entry" ||
                       m.movementType === "adjustment";
                     return (
-                      <TableRow key={m.id}>
-                        <TableCell className="text-sm">
+                      <TableRow key={m.id} className="hover:bg-muted/40 transition-colors">
+                        <TableCell className="text-sm text-muted-foreground">
                           {formatDate(m.movementDate)}
                         </TableCell>
                         <TableCell className="font-medium">
                           {m.product.name}
-                          <span className="text-xs text-gray-400 ml-1">
+                          <span className="text-xs text-muted-foreground ml-1">
                             ({m.product.unit})
                           </span>
                         </TableCell>
                         <TableCell>
                           <span
-                            className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${
-                              MOVEMENT_COLORS[m.movementType] ||
-                              "bg-gray-100 text-gray-700 border-gray-200"
-                            }`}
+                            className="inline-block px-2 py-0.5 rounded-full text-xs font-medium border"
+                            style={MOVEMENT_STYLES[m.movementType] ?? {
+                              backgroundColor: "var(--color-gray-100, #f3f4f6)",
+                              color: "var(--color-gray-700, #374151)",
+                              borderColor: "var(--color-gray-200, #e5e7eb)",
+                            }}
                           >
                             {MOVEMENT_LABELS[m.movementType] || m.movementType}
                           </span>
@@ -420,17 +493,17 @@ export default function MercaderiaPage() {
                         <TableCell className="text-right font-mono text-sm">
                           {m.unitCost !== null
                             ? formatCurrency(m.unitCost)
-                            : "\u2014"}
+                            : "—"}
                         </TableCell>
-                        <TableCell className="text-sm text-gray-500 max-w-[250px] truncate">
-                          {m.notes || "\u2014"}
+                        <TableCell className="text-sm text-muted-foreground max-w-[250px] truncate">
+                          {m.notes || "—"}
                         </TableCell>
                         <TableCell className="text-right">
                           {canDelete ? (
                             <Button
-                              variant="outline"
+                              variant="ghost"
                               size="sm"
-                              className="text-red-500 border-red-300 hover:bg-red-50"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs"
                               onClick={() =>
                                 handleDeleteMovement(m.id, m.movementType)
                               }
@@ -438,12 +511,12 @@ export default function MercaderiaPage() {
                               Eliminar
                             </Button>
                           ) : (
-                            <span className="text-xs text-gray-400">
+                            <span className="text-xs text-muted-foreground">
                               {m.movementType === "sale"
                                 ? "Via Ventas"
                                 : m.movementType === "purchase"
                                   ? "Via Compras"
-                                  : "\u2014"}
+                                  : "—"}
                             </span>
                           )}
                         </TableCell>
@@ -456,7 +529,7 @@ export default function MercaderiaPage() {
           )}
 
           {!loading && movements.length > 0 && (
-            <p className="text-xs text-gray-400 text-right">
+            <p className="text-xs text-muted-foreground text-right">
               Mostrando {movements.length} movimientos (máx. 500)
             </p>
           )}
@@ -468,76 +541,51 @@ export default function MercaderiaPage() {
       {/* ═══════════════════════════════════════════════════════ */}
       {viewMode === "stock" && (
         <>
-          {/* Summary Cards */}
-          {stockTotals && (
-            <div className="grid grid-cols-3 gap-4">
-              <div className="border rounded-lg p-4">
-                <p className="text-sm text-gray-500">Productos Activos</p>
-                <p className="text-2xl font-bold">
-                  {stockTotals.totalProducts}
-                </p>
-              </div>
-              <div className="border rounded-lg p-4">
-                <p className="text-sm text-gray-500">Stock Total Valuado</p>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(stockTotals.totalValued)}
-                </p>
-              </div>
-              <div className="border rounded-lg p-4">
-                <p className="text-sm text-gray-500">Stock Bajo</p>
-                <p
-                  className={`text-2xl font-bold ${
-                    stockTotals.lowStockCount > 0
-                      ? "text-red-500"
-                      : "text-green-600"
-                  }`}
-                >
-                  {stockTotals.lowStockCount} producto
-                  {stockTotals.lowStockCount !== 1 ? "s" : ""}
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Stock Table */}
           {loading ? (
-            <div className="text-center py-16 text-gray-400">Cargando...</div>
+            <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
           ) : stockSummary.length === 0 ? (
-            <div className="text-center py-16 text-gray-400">
-              No hay productos activos.
-            </div>
+            <EmptyState
+              icon={Warehouse}
+              title="Sin productos"
+              description="No hay productos activos"
+            />
           ) : (
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border border-border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Producto</TableHead>
-                    <TableHead>Unidad</TableHead>
-                    <TableHead className="text-right">Stock Actual</TableHead>
-                    <TableHead className="text-right">Stock Mín.</TableHead>
-                    <TableHead className="text-right">Costo Unit.</TableHead>
-                    <TableHead className="text-right">Valuado</TableHead>
-                    <TableHead className="text-center">Estado</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Producto</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Unidad</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Stock Actual</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Stock Mín.</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Costo Unit.</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-right">Valuado</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground text-center">Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {stockSummary.map((p) => (
                     <TableRow
                       key={p.id}
-                      className={p.isLowStock ? "bg-red-50" : ""}
+                      className="hover:bg-muted/40 transition-colors"
                     >
                       <TableCell className="font-medium">{p.name}</TableCell>
-                      <TableCell className="text-gray-500 text-sm">
+                      <TableCell className="text-muted-foreground text-sm">
                         {p.unit}
                       </TableCell>
-                      <TableCell
-                        className={`text-right font-mono font-medium ${
-                          p.isLowStock ? "text-red-500" : ""
-                        }`}
-                      >
-                        {p.currentStock}
+                      <TableCell className="text-right font-mono font-medium">
+                        <span
+                          style={
+                            p.isLowStock
+                              ? { color: "var(--color-red-500, #ef4444)" }
+                              : undefined
+                          }
+                        >
+                          {p.currentStock}
+                        </span>
                       </TableCell>
-                      <TableCell className="text-right font-mono text-sm text-gray-500">
+                      <TableCell className="text-right font-mono text-sm text-muted-foreground">
                         {p.minStock}
                       </TableCell>
                       <TableCell className="text-right font-mono text-sm">
@@ -548,13 +596,19 @@ export default function MercaderiaPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         {p.isLowStock ? (
-                          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 border border-red-200">
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-50 text-red-700 border-red-200"
+                          >
                             Bajo
-                          </span>
+                          </Badge>
                         ) : (
-                          <span className="inline-block px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                          <Badge
+                            variant="secondary"
+                            className="bg-green-50 text-green-700 border-green-200"
+                          >
                             OK
-                          </span>
+                          </Badge>
                         )}
                       </TableCell>
                     </TableRow>
@@ -580,6 +634,8 @@ export default function MercaderiaPage() {
         onSuccess={handleDialogSuccess}
         accountId={ACCOUNT_ID}
       />
+
+      {ConfirmDeleteMovementDialog}
     </div>
   );
 }

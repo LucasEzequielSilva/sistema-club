@@ -29,6 +29,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { Waves, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
 
 const ACCOUNT_ID = "test-account-id";
 
@@ -149,101 +152,79 @@ export default function CashflowPage() {
   const advancement = projectedSalesNum > 0 ? (realSales / projectedSalesNum) * 100 : 0;
   const exchangeRateNum = projRate ? parseFloat(projRate) : 0;
 
+  const monthNavActions = (
+    <div className="flex items-center gap-2">
+      <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
+        <SelectTrigger className="w-[130px] h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {MONTHS.map((m, i) => (
+            <SelectItem key={i} value={String(i)}>{m}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+        <SelectTrigger className="w-[95px] h-8">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {yearOptions.map((y) => (
+            <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => {
+            if (month === 0) { setMonth(11); setYear(year - 1); }
+            else setMonth(month - 1);
+          }}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 px-3"
+          onClick={() => {
+            const isCurrentMonth = month === now.getMonth() && year === now.getFullYear();
+            if (!isCurrentMonth) { setMonth(now.getMonth()); setYear(now.getFullYear()); }
+          }}
+        >
+          Hoy
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => {
+            if (month === 11) { setMonth(0); setYear(year + 1); }
+            else setMonth(month + 1);
+          }}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold">Cashflow Proyectado</h1>
-        <p className="text-gray-500 mt-1">
-          Proyección semanal de ingresos y egresos con saldo acumulado
-        </p>
-      </div>
-
-      {/* Period selector */}
-      <div className="flex flex-wrap gap-3 items-center">
-        <Select
-          value={String(month)}
-          onValueChange={(v) => setMonth(Number(v))}
-        >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {MONTHS.map((m, i) => (
-              <SelectItem key={i} value={String(i)}>
-                {m}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={String(year)}
-          onValueChange={(v) => setYear(Number(v))}
-        >
-          <SelectTrigger className="w-[100px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {yearOptions.map((y) => (
-              <SelectItem key={y} value={String(y)}>
-                {y}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* Navigation */}
-        <div className="flex gap-1 ml-auto">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (month === 0) {
-                setMonth(11);
-                setYear(year - 1);
-              } else {
-                setMonth(month - 1);
-              }
-            }}
-          >
-            &larr; Anterior
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const isCurrentMonth =
-                month === now.getMonth() && year === now.getFullYear();
-              if (!isCurrentMonth) {
-                setMonth(now.getMonth());
-                setYear(now.getFullYear());
-              }
-            }}
-          >
-            Hoy
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (month === 11) {
-                setMonth(0);
-                setYear(year + 1);
-              } else {
-                setMonth(month + 1);
-              }
-            }}
-          >
-            Siguiente &rarr;
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <PageHeader
+        title="Cashflow"
+        description="Proyección semanal de caja y KPIs"
+        icon={Waves}
+        actions={monthNavActions}
+      />
 
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Cargando...</div>
+        <div className="flex items-center justify-center py-16"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
       ) : !data ? (
-        <div className="text-center py-16 text-gray-400">
+        <div className="text-center py-16 text-muted-foreground">
           No hay datos disponibles
         </div>
       ) : (
@@ -252,65 +233,42 @@ export default function CashflowPage() {
           {/* SUMMARY CARDS                          */}
           {/* ═══════════════════════════════════════ */}
           <div className="grid grid-cols-5 gap-3">
-            <div className="border rounded-lg p-3">
-              <p className="text-xs text-gray-500">Saldo Inicial</p>
-              <p
-                className={`text-lg font-bold ${
-                  data.openingBalance >= 0
-                    ? "text-blue-600"
-                    : "text-red-600"
-                }`}
-              >
-                {formatCurrency(data.openingBalance)}
-              </p>
-            </div>
-            <div className="border rounded-lg p-3">
-              <p className="text-xs text-gray-500">Total Ingresos</p>
-              <p className="text-lg font-bold text-green-600">
-                {formatCurrency(data.totals.ingresos)}
-              </p>
-            </div>
-            <div className="border rounded-lg p-3">
-              <p className="text-xs text-gray-500">Total Egresos</p>
-              <p className="text-lg font-bold text-red-600">
-                {formatCurrency(data.totals.egresos)}
-              </p>
-            </div>
-            <div className="border rounded-lg p-3">
-              <p className="text-xs text-gray-500">Neto del Mes</p>
-              <p
-                className={`text-lg font-bold ${
-                  data.totals.neto >= 0
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {formatCurrency(data.totals.neto)}
-              </p>
-            </div>
-            <div className="border rounded-lg p-3">
-              <p className="text-xs text-gray-500">Saldo Final Proyectado</p>
-              <p
-                className={`text-lg font-bold ${
-                  data.closingBalance >= 0
-                    ? "text-blue-600"
-                    : "text-red-600"
-                }`}
-              >
-                {formatCurrency(data.closingBalance)}
-              </p>
-            </div>
+            <StatCard
+              title="Saldo Inicial"
+              value={formatCurrency(data.openingBalance)}
+              variant="default"
+            />
+            <StatCard
+              title="Total Ingresos"
+              value={formatCurrency(data.totals.ingresos)}
+              variant="success"
+            />
+            <StatCard
+              title="Total Egresos"
+              value={formatCurrency(data.totals.egresos)}
+              variant="danger"
+            />
+            <StatCard
+              title="Neto del Mes"
+              value={formatCurrency(data.totals.neto)}
+              variant={data.totals.neto >= 0 ? "success" : "danger"}
+            />
+            <StatCard
+              title="Saldo Final Proyectado"
+              value={formatCurrency(data.closingBalance)}
+              variant={data.closingBalance >= 0 ? "success" : "danger"}
+            />
           </div>
 
           {/* ═══════════════════════════════════════ */}
           {/* WEEKLY GRID                            */}
           {/* ═══════════════════════════════════════ */}
-          <div className="border rounded-lg overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b">
-              <h3 className="font-semibold">
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="px-5 py-3 bg-muted/30 border-b border-border">
+              <h3 className="font-semibold text-foreground">
                 Flujo Semanal — {MONTHS[month]} {year}
               </h3>
-              <p className="text-xs text-gray-400">
+              <p className="text-xs text-muted-foreground">
                 Click en una semana para ver detalle de movimientos
               </p>
             </div>
@@ -318,32 +276,36 @@ export default function CashflowPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-white z-10 min-w-[160px]">
+                    <TableHead className="sticky left-0 bg-card z-10 min-w-[160px] text-xs uppercase text-muted-foreground">
                       Concepto
                     </TableHead>
                     {data.weeks.map((w: any) => (
                       <TableHead
                         key={w.weekIndex}
-                        className="text-right min-w-[120px]"
+                        className="text-right min-w-[120px] text-xs uppercase text-muted-foreground"
                       >
                         {w.label}
                       </TableHead>
                     ))}
-                    <TableHead className="text-right min-w-[120px] bg-slate-50 font-bold">
+                    <TableHead className="text-right min-w-[120px] bg-muted/30 font-bold text-xs uppercase text-muted-foreground">
                       Total
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {/* Saldo Inicial */}
-                  <TableRow>
-                    <TableCell className="font-medium text-blue-700 sticky left-0 bg-white">
+                  <TableRow className="hover:bg-muted/40">
+                    <TableCell
+                      className="font-medium sticky left-0 bg-card"
+                      style={{ color: "var(--info-muted-foreground)" }}
+                    >
                       Saldo Inicial
                     </TableCell>
                     {data.weeks.map((w: any, i: number) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm text-blue-600"
+                        className="text-right font-mono text-sm"
+                        style={{ color: "var(--info-muted-foreground)" }}
                       >
                         {formatCurrency(
                           i === 0
@@ -352,20 +314,27 @@ export default function CashflowPage() {
                         )}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono text-sm bg-slate-50 text-blue-600">
+                    <TableCell
+                      className="text-right font-mono text-sm bg-muted/30"
+                      style={{ color: "var(--info-muted-foreground)" }}
+                    >
                       {formatCurrency(data.openingBalance)}
                     </TableCell>
                   </TableRow>
 
                   {/* Ingresos Confirmados */}
-                  <TableRow>
-                    <TableCell className="text-green-600 sticky left-0 bg-white">
+                  <TableRow className="hover:bg-muted/40">
+                    <TableCell
+                      className="sticky left-0 bg-card"
+                      style={{ color: "var(--success-muted-foreground)" }}
+                    >
                       (+) Ingresos confirmados
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm text-green-600 cursor-pointer hover:bg-green-50"
+                        className="text-right font-mono text-sm cursor-pointer hover:bg-muted/60"
+                        style={{ color: "var(--success-muted-foreground)" }}
                         onClick={() => openWeekDetail(w.weekIndex)}
                       >
                         {w.ingresosConfirmed > 0
@@ -373,7 +342,10 @@ export default function CashflowPage() {
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono text-sm bg-slate-50 text-green-600 font-medium">
+                    <TableCell
+                      className="text-right font-mono text-sm bg-muted/30 font-medium"
+                      style={{ color: "var(--success-muted-foreground)" }}
+                    >
                       {formatCurrency(
                         data.weeks.reduce(
                           (s: number, w: any) => s + w.ingresosConfirmed,
@@ -384,14 +356,14 @@ export default function CashflowPage() {
                   </TableRow>
 
                   {/* Ingresos Pendientes (proyectados) */}
-                  <TableRow>
-                    <TableCell className="text-green-400 italic sticky left-0 bg-white">
+                  <TableRow className="hover:bg-muted/40">
+                    <TableCell className="text-muted-foreground italic sticky left-0 bg-card">
                       (+) Ingresos pendientes
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm text-green-400 italic cursor-pointer hover:bg-green-50"
+                        className="text-right font-mono text-sm text-muted-foreground italic cursor-pointer hover:bg-muted/60"
                         onClick={() => openWeekDetail(w.weekIndex)}
                       >
                         {w.ingresosPending > 0
@@ -399,7 +371,7 @@ export default function CashflowPage() {
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono text-sm bg-slate-50 text-green-400 italic">
+                    <TableCell className="text-right font-mono text-sm bg-muted/30 text-muted-foreground italic">
                       {formatCurrency(
                         data.weeks.reduce(
                           (s: number, w: any) => s + w.ingresosPending,
@@ -410,34 +382,45 @@ export default function CashflowPage() {
                   </TableRow>
 
                   {/* Total Ingresos */}
-                  <TableRow className="bg-green-50">
-                    <TableCell className="font-semibold text-green-700 sticky left-0 bg-green-50">
+                  <TableRow style={{ backgroundColor: "var(--success-muted)" }}>
+                    <TableCell
+                      className="font-semibold sticky left-0"
+                      style={{ backgroundColor: "var(--success-muted)", color: "var(--success-muted-foreground)" }}
+                    >
                       = Total Ingresos
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm font-medium text-green-700"
+                        className="text-right font-mono text-sm font-medium"
+                        style={{ color: "var(--success-muted-foreground)" }}
                       >
                         {w.totalIngresos > 0
                           ? formatCurrency(w.totalIngresos)
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono font-bold bg-green-100 text-green-700">
+                    <TableCell
+                      className="text-right font-mono font-bold"
+                      style={{ color: "var(--success-muted-foreground)" }}
+                    >
                       {formatCurrency(data.totals.ingresos)}
                     </TableCell>
                   </TableRow>
 
                   {/* Egresos Confirmados */}
-                  <TableRow>
-                    <TableCell className="text-red-600 sticky left-0 bg-white">
+                  <TableRow className="hover:bg-muted/40">
+                    <TableCell
+                      className="sticky left-0 bg-card"
+                      style={{ color: "var(--danger-muted-foreground)" }}
+                    >
                       (-) Egresos confirmados
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm text-red-600 cursor-pointer hover:bg-red-50"
+                        className="text-right font-mono text-sm cursor-pointer hover:bg-muted/60"
+                        style={{ color: "var(--danger-muted-foreground)" }}
                         onClick={() => openWeekDetail(w.weekIndex)}
                       >
                         {w.egresoConfirmed > 0
@@ -445,7 +428,10 @@ export default function CashflowPage() {
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono text-sm bg-slate-50 text-red-600 font-medium">
+                    <TableCell
+                      className="text-right font-mono text-sm bg-muted/30 font-medium"
+                      style={{ color: "var(--danger-muted-foreground)" }}
+                    >
                       {formatCurrency(
                         data.weeks.reduce(
                           (s: number, w: any) => s + w.egresoConfirmed,
@@ -456,14 +442,14 @@ export default function CashflowPage() {
                   </TableRow>
 
                   {/* Egresos Pendientes (proyectados) */}
-                  <TableRow>
-                    <TableCell className="text-red-400 italic sticky left-0 bg-white">
+                  <TableRow className="hover:bg-muted/40">
+                    <TableCell className="text-muted-foreground italic sticky left-0 bg-card">
                       (-) Egresos pendientes
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm text-red-400 italic cursor-pointer hover:bg-red-50"
+                        className="text-right font-mono text-sm text-muted-foreground italic cursor-pointer hover:bg-muted/60"
                         onClick={() => openWeekDetail(w.weekIndex)}
                       >
                         {w.egresosPending > 0
@@ -471,7 +457,7 @@ export default function CashflowPage() {
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono text-sm bg-slate-50 text-red-400 italic">
+                    <TableCell className="text-right font-mono text-sm bg-muted/30 text-muted-foreground italic">
                       {formatCurrency(
                         data.weeks.reduce(
                           (s: number, w: any) => s + w.egresosPending,
@@ -482,88 +468,104 @@ export default function CashflowPage() {
                   </TableRow>
 
                   {/* Total Egresos */}
-                  <TableRow className="bg-red-50">
-                    <TableCell className="font-semibold text-red-700 sticky left-0 bg-red-50">
+                  <TableRow style={{ backgroundColor: "var(--danger-muted)" }}>
+                    <TableCell
+                      className="font-semibold sticky left-0"
+                      style={{ backgroundColor: "var(--danger-muted)", color: "var(--danger-muted-foreground)" }}
+                    >
                       = Total Egresos
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right font-mono text-sm font-medium text-red-700"
+                        className="text-right font-mono text-sm font-medium"
+                        style={{ color: "var(--danger-muted-foreground)" }}
                       >
                         {w.totalEgresos > 0
                           ? formatCurrency(w.totalEgresos)
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right font-mono font-bold bg-red-100 text-red-700">
+                    <TableCell
+                      className="text-right font-mono font-bold"
+                      style={{ color: "var(--danger-muted-foreground)" }}
+                    >
                       {formatCurrency(data.totals.egresos)}
                     </TableCell>
                   </TableRow>
 
                   {/* Neto */}
-                  <TableRow className="bg-blue-50 border-t-2">
-                    <TableCell className="font-bold text-blue-700 sticky left-0 bg-blue-50">
+                  <TableRow className="border-t-2" style={{ backgroundColor: "var(--info-muted)" }}>
+                    <TableCell
+                      className="font-bold sticky left-0"
+                      style={{ backgroundColor: "var(--info-muted)", color: "var(--info-muted-foreground)" }}
+                    >
                       = Neto Semanal
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className={`text-right font-mono text-sm font-bold ${
-                          w.neto >= 0 ? "text-green-700" : "text-red-600"
-                        }`}
+                        className="text-right font-mono text-sm font-bold"
+                        style={{
+                          color: w.neto >= 0
+                            ? "var(--success-muted-foreground)"
+                            : "var(--danger-muted-foreground)",
+                        }}
                       >
                         {w.neto !== 0 ? formatCurrency(w.neto) : "\u2014"}
                       </TableCell>
                     ))}
                     <TableCell
-                      className={`text-right font-mono font-bold bg-blue-100 ${
-                        data.totals.neto >= 0
-                          ? "text-green-700"
-                          : "text-red-600"
-                      }`}
+                      className="text-right font-mono font-bold"
+                      style={{
+                        color: data.totals.neto >= 0
+                          ? "var(--success-muted-foreground)"
+                          : "var(--danger-muted-foreground)",
+                      }}
                     >
                       {formatCurrency(data.totals.neto)}
                     </TableCell>
                   </TableRow>
 
                   {/* Saldo Final (running balance) */}
-                  <TableRow className="border-t-2">
-                    <TableCell className="font-bold sticky left-0 bg-white">
+                  <TableRow className="border-t-2 hover:bg-muted/40">
+                    <TableCell className="font-bold sticky left-0 bg-card">
                       Saldo Final
                     </TableCell>
                     {data.weeks.map((w: any, i: number) => (
                       <TableCell
                         key={w.weekIndex}
-                        className={`text-right font-mono text-sm font-bold ${
-                          data.runningBalances[i] >= 0
-                            ? "text-blue-700"
-                            : "text-red-600"
-                        }`}
+                        className="text-right font-mono text-sm font-bold"
+                        style={{
+                          color: data.runningBalances[i] >= 0
+                            ? "var(--info-muted-foreground)"
+                            : "var(--danger-muted-foreground)",
+                        }}
                       >
                         {formatCurrency(data.runningBalances[i])}
                       </TableCell>
                     ))}
                     <TableCell
-                      className={`text-right font-mono font-bold bg-slate-50 ${
-                        data.closingBalance >= 0
-                          ? "text-blue-700"
-                          : "text-red-600"
-                      }`}
+                      className="text-right font-mono font-bold bg-muted/30"
+                      style={{
+                        color: data.closingBalance >= 0
+                          ? "var(--info-muted-foreground)"
+                          : "var(--danger-muted-foreground)",
+                      }}
                     >
                       {formatCurrency(data.closingBalance)}
                     </TableCell>
                   </TableRow>
 
                   {/* Items count per week */}
-                  <TableRow>
-                    <TableCell className="text-gray-400 text-xs sticky left-0 bg-white">
+                  <TableRow className="hover:bg-muted/40">
+                    <TableCell className="text-muted-foreground text-xs sticky left-0 bg-card">
                       Movimientos
                     </TableCell>
                     {data.weeks.map((w: any) => (
                       <TableCell
                         key={w.weekIndex}
-                        className="text-right text-xs text-gray-400 cursor-pointer hover:text-blue-600"
+                        className="text-right text-xs text-muted-foreground cursor-pointer hover:text-foreground"
                         onClick={() => openWeekDetail(w.weekIndex)}
                       >
                         {w.items.length > 0
@@ -571,7 +573,7 @@ export default function CashflowPage() {
                           : "\u2014"}
                       </TableCell>
                     ))}
-                    <TableCell className="text-right text-xs text-gray-400 bg-slate-50">
+                    <TableCell className="text-right text-xs text-muted-foreground bg-muted/30">
                       {data.totals.itemCount} total
                     </TableCell>
                   </TableRow>
@@ -585,8 +587,8 @@ export default function CashflowPage() {
           {/* ═══════════════════════════════════════ */}
           <div className="grid grid-cols-2 gap-6">
             {/* Manual Projection Form */}
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-3">
+            <div className="rounded-xl border border-border bg-card p-5">
+              <h3 className="font-semibold mb-4 text-foreground">
                 Proyección Manual — {MONTHS[month]} {year}
               </h3>
               <div className="space-y-3">
@@ -636,51 +638,51 @@ export default function CashflowPage() {
             </div>
 
             {/* KPIs derived */}
-            <div className="border rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Indicadores del Mes</h3>
+            <div className="rounded-xl border border-border bg-card p-5">
+              <h3 className="font-semibold mb-4 text-foreground">Indicadores del Mes</h3>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Ingresos reales</span>
-                  <span className="font-mono font-medium">
+                  <span className="text-muted-foreground">Ingresos reales</span>
+                  <span className="font-mono font-semibold text-foreground">
                     {formatCurrency(realSales)}
                   </span>
                 </div>
                 {projectedSalesNum > 0 && (
                   <>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">
+                      <span className="text-muted-foreground">
                         Ventas proyectadas
                       </span>
-                      <span className="font-mono font-medium">
+                      <span className="font-mono font-semibold text-foreground">
                         {formatCurrency(projectedSalesNum)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Grado de avance</span>
+                      <span className="text-muted-foreground">Grado de avance</span>
                       <span
-                        className={`font-mono font-bold ${
-                          advancement >= 100
-                            ? "text-green-600"
+                        className="font-mono font-bold"
+                        style={{
+                          color: advancement >= 100
+                            ? "var(--success-muted-foreground)"
                             : advancement >= 70
-                              ? "text-amber-600"
-                              : "text-red-600"
-                        }`}
+                              ? "var(--warning-muted-foreground)"
+                              : "var(--danger-muted-foreground)",
+                        }}
                       >
                         {advancement.toFixed(1)}%
                       </span>
                     </div>
                     {/* Progress bar */}
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-muted rounded-full h-2">
                       <div
-                        className={`h-2 rounded-full transition-all ${
-                          advancement >= 100
-                            ? "bg-green-500"
-                            : advancement >= 70
-                              ? "bg-amber-500"
-                              : "bg-red-500"
-                        }`}
+                        className="h-2 rounded-full transition-all"
                         style={{
                           width: `${Math.min(advancement, 100)}%`,
+                          backgroundColor: advancement >= 100
+                            ? "var(--success-muted-foreground)"
+                            : advancement >= 70
+                              ? "var(--warning-muted-foreground)"
+                              : "var(--danger-muted-foreground)",
                         }}
                       />
                     </div>
@@ -688,40 +690,40 @@ export default function CashflowPage() {
                 )}
                 {exchangeRateNum > 0 && (
                   <>
-                    <div className="flex justify-between text-sm mt-3 pt-3 border-t">
-                      <span className="text-gray-500">
+                    <div className="flex justify-between text-sm mt-3 pt-3 border-t border-border">
+                      <span className="text-muted-foreground">
                         Tipo de cambio
                       </span>
-                      <span className="font-mono font-medium">
+                      <span className="font-mono font-semibold text-foreground">
                         ${exchangeRateNum.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">
+                      <span className="text-muted-foreground">
                         Neto en USD
                       </span>
-                      <span className="font-mono font-medium">
+                      <span className="font-mono font-semibold text-foreground">
                         USD{" "}
                         {(data.totals.neto / exchangeRateNum).toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">
+                      <span className="text-muted-foreground">
                         Saldo final en USD
                       </span>
-                      <span className="font-mono font-medium">
+                      <span className="font-mono font-semibold text-foreground">
                         USD{" "}
                         {(data.closingBalance / exchangeRateNum).toFixed(2)}
                       </span>
                     </div>
                   </>
                 )}
-                <div className="flex justify-between text-sm mt-3 pt-3 border-t">
-                  <span className="text-gray-500">Total movimientos</span>
+                <div className="flex justify-between text-sm mt-3 pt-3 border-t border-border">
+                  <span className="text-muted-foreground">Total movimientos</span>
                   <span className="font-mono">{data.totals.itemCount}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Semanas</span>
+                  <span className="text-muted-foreground">Semanas</span>
                   <span className="font-mono">{data.weekCount}</span>
                 </div>
               </div>
@@ -731,17 +733,23 @@ export default function CashflowPage() {
           {/* ═══════════════════════════════════════ */}
           {/* LEGEND                                 */}
           {/* ═══════════════════════════════════════ */}
-          <div className="flex gap-4 text-xs text-gray-500 border rounded-lg p-3">
+          <div className="flex gap-4 text-xs text-muted-foreground border border-border rounded-lg p-3 bg-muted/30">
             <span>
-              <span className="inline-block w-3 h-3 rounded bg-green-600 mr-1" />
+              <span
+                className="inline-block w-3 h-3 rounded mr-1"
+                style={{ backgroundColor: "var(--success-muted-foreground)" }}
+              />
               Confirmado (cobros/pagos registrados)
             </span>
             <span>
-              <span className="inline-block w-3 h-3 rounded bg-green-300 mr-1" />
+              <span className="inline-block w-3 h-3 rounded bg-muted-foreground/40 mr-1" />
               Pendiente (por cobrar/pagar, proyectado)
             </span>
             <span>
-              <span className="inline-block w-3 h-3 rounded bg-blue-600 mr-1" />
+              <span
+                className="inline-block w-3 h-3 rounded mr-1"
+                style={{ backgroundColor: "var(--info-muted-foreground)" }}
+              />
               Saldo acumulado
             </span>
             <span className="ml-auto italic">
@@ -767,24 +775,30 @@ export default function CashflowPage() {
           </DialogHeader>
 
           {detailLoading ? (
-            <div className="py-8 text-center text-gray-400">Cargando...</div>
+            <div className="flex items-center justify-center py-8"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
           ) : !detailData || detailData.items.length === 0 ? (
-            <div className="py-8 text-center text-gray-400">
+            <div className="py-8 text-center text-muted-foreground">
               Sin movimientos en esta semana
             </div>
           ) : (
             <div className="space-y-4">
               {/* Summary */}
               <div className="grid grid-cols-2 gap-3">
-                <div className="border rounded p-2">
-                  <p className="text-xs text-gray-500">Ingresos</p>
-                  <p className="font-bold text-green-600">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Ingresos</p>
+                  <p
+                    className="font-bold"
+                    style={{ color: "var(--success-muted-foreground)" }}
+                  >
                     {formatCurrency(detailData.totals.ingresos)}
                   </p>
                 </div>
-                <div className="border rounded p-2">
-                  <p className="text-xs text-gray-500">Egresos</p>
-                  <p className="font-bold text-red-600">
+                <div className="rounded-lg border border-border p-3">
+                  <p className="text-xs text-muted-foreground">Egresos</p>
+                  <p
+                    className="font-bold"
+                    style={{ color: "var(--danger-muted-foreground)" }}
+                  >
                     {formatCurrency(detailData.totals.egresos)}
                   </p>
                 </div>
@@ -794,18 +808,18 @@ export default function CashflowPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Concepto</TableHead>
-                    <TableHead>Detalle</TableHead>
-                    <TableHead className="text-right">Monto</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Tipo</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Concepto</TableHead>
+                    <TableHead className="text-xs uppercase text-muted-foreground">Detalle</TableHead>
+                    <TableHead className="text-right text-xs uppercase text-muted-foreground">Monto</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {detailData.items.map((item: any) => (
                     <TableRow
                       key={item.id}
-                      className={item.isPending ? "opacity-60 italic" : ""}
+                      className={`hover:bg-muted/40 ${item.isPending ? "opacity-60 italic" : ""}`}
                     >
                       <TableCell className="text-sm">
                         {formatDate(item.date)}
@@ -826,7 +840,11 @@ export default function CashflowPage() {
                         {item.isPending && (
                           <Badge
                             variant="outline"
-                            className="text-xs ml-1 border-amber-300 text-amber-600"
+                            className="text-xs ml-1"
+                            style={{
+                              borderColor: "var(--warning-muted-foreground)",
+                              color: "var(--warning-muted-foreground)",
+                            }}
                           >
                             Pendiente
                           </Badge>
@@ -835,15 +853,11 @@ export default function CashflowPage() {
                       <TableCell className="max-w-[200px] truncate text-sm">
                         {item.concept}
                       </TableCell>
-                      <TableCell className="text-sm text-gray-500 max-w-[150px] truncate">
+                      <TableCell className="text-sm text-muted-foreground max-w-[150px] truncate">
                         {item.detail}
                       </TableCell>
                       <TableCell
-                        className={`text-right font-mono font-medium ${
-                          item.direction === "ingreso"
-                            ? "text-green-600"
-                            : "text-red-600"
-                        }`}
+                        className="text-right font-mono font-semibold text-foreground"
                       >
                         {item.direction === "ingreso" ? "+" : "-"}
                         {formatCurrency(item.amount)}

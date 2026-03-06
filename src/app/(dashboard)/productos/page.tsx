@@ -20,9 +20,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ProductDialog } from "./components/product-dialog";
 import { ProductDetail } from "./components/product-detail";
+import { PageHeader } from "@/components/shared/page-header";
+import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
+import { Package, MoreHorizontal, Loader2 } from "lucide-react";
+import { useConfirm } from "@/hooks/use-confirm";
 
 const ACCOUNT_ID = "test-account-id"; // TODO: reemplazar por sesión real
 
@@ -74,6 +85,12 @@ function formatCurrency(n: number) {
   }).format(n);
 }
 
+function getMarginClass(marginPct: number): string {
+  if (marginPct < 20) return "text-[var(--danger-muted-foreground)]";
+  if (marginPct < 30) return "text-[var(--warning-muted-foreground)]";
+  return "text-[var(--success-muted-foreground)]";
+}
+
 export default function ProductosPage() {
   const [products, setProducts] = useState<ProductListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -90,6 +107,19 @@ export default function ProductosPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  const [confirmDeactivate, ConfirmDeactivateDialog] = useConfirm({
+    title: "Desactivar producto",
+    description: "El producto dejará de aparecer en ventas y POS. Sus datos históricos se conservan.",
+    confirmLabel: "Desactivar",
+    destructive: false,
+  });
+  const [confirmDelete, ConfirmDeleteDialog] = useConfirm({
+    title: "Eliminar producto",
+    description: "Esta acción elimina el producto permanentemente y no se puede deshacer.",
+    confirmLabel: "Eliminar",
+    destructive: true,
+  });
 
   // Load filters data
   useEffect(() => {
@@ -129,7 +159,7 @@ export default function ProductosPage() {
   }, [loadProducts]);
 
   const handleSoftDelete = async (id: string, name: string) => {
-    if (!confirm(`¿Desactivar "${name}"? No se eliminarán sus datos.`)) return;
+    if (!(await confirmDeactivate())) return;
     try {
       await trpc.productos.softDelete.mutate({ id });
       toast.success(`"${name}" desactivado`);
@@ -139,13 +169,18 @@ export default function ProductosPage() {
     }
   };
 
+  const handleActivate = async (id: string, name: string) => {
+    try {
+      await trpc.productos.softDelete.mutate({ id });
+      toast.success(`"${name}" activado`);
+      loadProducts();
+    } catch (err: any) {
+      toast.error(err.message || "Error al activar");
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
-    if (
-      !confirm(
-        `¿Eliminar permanentemente "${name}"? Esta acción no se puede deshacer.`
-      )
-    )
-      return;
+    if (!(await confirmDelete())) return;
     try {
       await trpc.productos.delete.mutate({ id });
       toast.success(`"${name}" eliminado`);
@@ -188,34 +223,30 @@ export default function ProductosPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Productos</h1>
-          <p className="text-gray-500 mt-1">
-            {loading
-              ? "Cargando..."
-              : `${products.length} producto${products.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-        <Button
-          onClick={() => {
-            setEditingId(null);
-            setShowDialog(true);
-          }}
-        >
-          + Nuevo Producto
-        </Button>
-      </div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <PageHeader
+        title="Productos"
+        description="Catálogo de productos, costos y precios"
+        icon={Package}
+        actions={
+          <Button
+            onClick={() => {
+              setEditingId(null);
+              setShowDialog(true);
+            }}
+          >
+            + Nuevo Producto
+          </Button>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border mb-4 flex-wrap">
         <Input
           placeholder="Buscar por nombre..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="max-w-sm"
+          className="max-w-xs"
         />
 
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
@@ -263,15 +294,55 @@ export default function ProductosPage() {
 
       {/* Table */}
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Cargando...</div>
-      ) : products.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          {hasFilters
-            ? "Sin resultados para los filtros aplicados"
-            : "No hay productos. Creá uno para comenzar."}
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="bg-muted/30 px-4 py-3 border-b border-border">
+            <div className="grid grid-cols-9 gap-3 animate-pulse">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="h-3 bg-muted rounded" />
+              ))}
+            </div>
+          </div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-9 gap-3 px-4 py-3 border-b border-border last:border-0 animate-pulse">
+              <div className="h-3 w-28 bg-muted rounded" />
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-3 w-12 bg-muted rounded ml-auto" />
+              <div className="h-3 w-8 bg-muted rounded mx-auto" />
+              <div className="h-5 w-12 bg-muted rounded mx-auto" />
+              <div className="h-3 w-6 bg-muted rounded ml-auto" />
+            </div>
+          ))}
         </div>
+      ) : products.length === 0 ? (
+        hasFilters ? (
+          <div className="rounded-xl border border-border bg-card">
+            <EmptyState
+              icon={Package}
+              title="Sin resultados"
+              description="No hay productos que coincidan con los filtros aplicados."
+              actionLabel="Limpiar filtros"
+              onAction={clearFilters}
+            />
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card">
+            <EmptyState
+              icon={Package}
+              title="Sin productos todavía"
+              description="Cargá tu catálogo de productos con costos, precios y stock. Los necesitás antes de poder registrar ventas."
+              actionLabel="+ Nuevo Producto"
+              onAction={() => {
+                setEditingId(null);
+                setShowDialog(true);
+              }}
+            />
+          </div>
+        )
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -290,7 +361,7 @@ export default function ProductosPage() {
               {products.map((p) => (
                 <TableRow
                   key={p.id}
-                  className={!p.isActive ? "opacity-50" : ""}
+                  className={`hover:bg-muted/40 ${!p.isActive ? "opacity-50" : ""}`}
                 >
                   <TableCell>
                     <div
@@ -298,37 +369,29 @@ export default function ProductosPage() {
                       onClick={() => setDetailId(p.id)}
                     >
                       <span className="font-medium">{p.name}</span>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-xs text-muted-foreground">
                         {UNIT_LABELS[p.unit] || p.unit}
                         {p.sku && ` | SKU: ${p.sku}`}
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-gray-500">
+                  <TableCell className="text-muted-foreground">
                     {p.category.name}
                   </TableCell>
-                  <TableCell className="text-gray-500">
+                  <TableCell className="text-muted-foreground">
                     {p.supplier?.name || "—"}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
+                  <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
                     {formatCurrency(p.unitCost)}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-sm">
+                  <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
                     {p.defaultPricing
                       ? formatCurrency(p.defaultPricing.salePrice)
                       : "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono text-sm">
                     {p.defaultPricing ? (
-                      <span
-                        className={
-                          p.defaultPricing.marginPct < 20
-                            ? "text-red-500"
-                            : p.defaultPricing.marginPct < 30
-                              ? "text-amber-500"
-                              : "text-green-600"
-                        }
-                      >
+                      <span className={getMarginClass(p.defaultPricing.marginPct)}>
                         {p.defaultPricing.marginPct.toFixed(1)}%
                       </span>
                     ) : (
@@ -352,43 +415,57 @@ export default function ProductosPage() {
                   </TableCell>
                   <TableCell className="text-center">
                     {p.isActive ? (
-                      <span className="text-green-600">&#10003;</span>
+                      <Badge variant="outline" className="text-[var(--success-muted-foreground)] border-[var(--success-muted-foreground)]/30 bg-[var(--success-muted-foreground)]/10">
+                        Activo
+                      </Badge>
                     ) : (
-                      <span className="text-gray-400">&#10007;</span>
+                      <Badge variant="secondary">
+                        Inactivo
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex gap-1 justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setEditingId(p.id);
-                          setShowDialog(true);
-                        }}
-                      >
-                        Editar
-                      </Button>
-                      {p.isActive ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-amber-600 border-amber-300 hover:bg-amber-50"
-                          onClick={() => handleSoftDelete(p.id, p.name)}
-                        >
-                          Desactivar
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                          <MoreHorizontal className="h-3.5 w-3.5" />
                         </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-500 border-red-300 hover:bg-red-50"
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setDetailId(p.id)}>
+                          Ver detalle
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setEditingId(p.id);
+                            setShowDialog(true);
+                          }}
+                        >
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {p.isActive ? (
+                          <DropdownMenuItem
+                            onClick={() => handleSoftDelete(p.id, p.name)}
+                          >
+                            Desactivar
+                          </DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem
+                            onClick={() => handleActivate(p.id, p.name)}
+                          >
+                            Activar
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
                           onClick={() => handleDelete(p.id, p.name)}
                         >
                           Eliminar
-                        </Button>
-                      )}
-                    </div>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
@@ -408,6 +485,8 @@ export default function ProductosPage() {
         accountId={ACCOUNT_ID}
         editingId={editingId}
       />
+      {ConfirmDeactivateDialog}
+      {ConfirmDeleteDialog}
     </div>
   );
 }

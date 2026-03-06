@@ -5,7 +5,7 @@ import { z } from "zod";
 // ============================================================
 
 export const createBankAccountSchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   name: z.string().min(1, "Nombre es obligatorio").max(100, "Máximo 100 caracteres"),
   initialBalance: z.number().default(0),
   balanceDate: z.coerce.date().optional().nullable(),

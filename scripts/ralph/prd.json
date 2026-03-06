@@ -1,0 +1,251 @@
+{
+  "name": "Sistema Club — Adictiva, Fácil, Usable (Round 2)",
+  "branchName": "ralph/addictive-easy-usable",
+  "description": "Sprint de producto basado en análisis BMAD. Objetivo: crear hábito diario de uso, reducir fricción en flujos core, y hacer que el negocio sea visible de un vistazo. Sin tocar routers tRPC ni business logic.",
+  "userStories": [
+    {
+      "id": "story-r2-01",
+      "title": "Tablero — Preset 'Hoy' con stats del día actual",
+      "passes": true,
+      "priority": 1,
+      "description": "Agregar 'Hoy' como primera opción en el selector de período del tablero. Cuando se selecciona, muestra ventas del día actual (desde medianoche hasta ahora). Esto da a Mati una razón para abrir la app cada mañana.",
+      "acceptanceCriteria": [
+        "PRESETS tiene un nuevo ítem: { id: 'today', label: 'Hoy' } como primer elemento del array",
+        "getDateRange maneja 'today': from = inicio del día (00:00:00), to = fin del día (23:59:59)",
+        "El preset 'Hoy' está seleccionado por defecto al abrir el tablero (cambiar el useState inicial de 'this_month' a 'today')",
+        "Los botones de preset tienen el mismo estilo que ya existe",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/tablero/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-02",
+      "title": "POS — Quick picks: top 5 productos recientes (1-click)",
+      "passes": true,
+      "priority": 2,
+      "description": "Mostrar los últimos 5 productos vendidos en la sesión actual como chips clickeables encima del buscador del POS. Click en un chip = seleccionar ese producto directamente (sin tipear). Los chips se guardan en un state de 'recentProducts' que se actualiza después de cada venta exitosa.",
+      "acceptanceCriteria": [
+        "Hay un estado 'recentProducts' (array de {id, name, max 5}) en el POS, inicializado como []",
+        "Después de cada venta exitosa (en handleConfirm), el producto vendido se agrega al frente de recentProducts (máximo 5, sin duplicados)",
+        "Si recentProducts.length > 0, se muestra una fila de chips ENCIMA del Label 'BUSCAR PRODUCTO'",
+        "Cada chip muestra el nombre del producto (truncado a 20 chars) con un botón clickeable",
+        "Click en chip → llama a handleSelectProduct(product) directamente, igual que seleccionar del dropdown",
+        "El chip activo (producto seleccionado actualmente) tiene un estilo diferente: border-primary bg-primary/10",
+        "Los chips usan: className='text-xs px-2.5 py-1 rounded-full border border-border bg-muted hover:bg-accent cursor-pointer transition-colors'",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/pos/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-03",
+      "title": "Clubi — Auto-saludo diario con briefing del negocio",
+      "passes": true,
+      "priority": 3,
+      "description": "Una vez por día, cuando el usuario abre la app por primera vez, Clubi se auto-abre y envía un saludo de buenos días con el contexto del negocio. Solo ocurre una vez por día (guardar fecha en localStorage). La lógica va en ai-assistant.tsx con un useEffect en el mount.",
+      "acceptanceCriteria": [
+        "En ai-assistant.tsx, en el useEffect de mount (o en un useEffect separado), verificar localStorage.getItem('clubiLastGreeting')",
+        "Si la fecha guardada NO es hoy (formato YYYY-MM-DD), ejecutar el auto-saludo",
+        "El auto-saludo: setIsOpen(true) + llamar sendAutoGreeting() que envía el mensaje 'Buenos días! Dame un resumen rápido de cómo está el negocio hoy.' al API de chat",
+        "Después de enviar, guardar localStorage.setItem('clubiLastGreeting', hoy) donde hoy = new Date().toISOString().split('T')[0]",
+        "sendAutoGreeting() debe enviar el mensaje como si fuera del usuario (role: 'user') y processar la respuesta streameada normalmente",
+        "Si el usuario ya tiene el chat abierto y hay mensajes previos, NO enviar el saludo (verificar messages.length === 0)",
+        "Build pasa sin errores TypeScript"
+      ],
+      "files": [
+        "src/components/shared/ai-assistant.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-04",
+      "title": "Tablero — Widget 'Cobros pendientes' con lista accionable",
+      "passes": true,
+      "priority": 4,
+      "description": "Agregar un widget en el tablero (solo cuando hay datos) que muestre las ventas con cobro pendiente o parcial del período seleccionado. Usar los datos de recentActivity (ya disponibles en data.recentActivity) filtrando por cobro !== 'Cobrada'. Mostrar máximo 5, con link a /ventas para ver todos.",
+      "acceptanceCriteria": [
+        "El widget aparece debajo de los charts existentes, solo cuando hay ventas (misma condición que el resto del tablero)",
+        "Título: 'Cobros Pendientes' con ícono Clock de lucide-react",
+        "Filtra data.recentActivity donde a.type === 'venta' && a.cobro !== 'Cobrada'",
+        "Si no hay cobros pendientes: mostrar 'Todo cobrado' con ícono CheckCircle2 en color success",
+        "Si hay cobros pendientes: mostrar una tabla compacta con columnas: Producto/Concepto | Fecha | Total | Estado",
+        "El estado se muestra como badge: 'Pendiente' = bg-amber-50 text-amber-700, 'Parcial' = bg-blue-50 text-blue-700",
+        "Al final de la tabla: botón 'Ver todos los pendientes' que navega a /ventas (usar router.push ya importado)",
+        "El widget usa el mismo estilo de card: rounded-xl border border-border bg-card p-5",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/tablero/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-05",
+      "title": "POS — Botón 'Repetir venta' en success state",
+      "passes": true,
+      "priority": 5,
+      "description": "En la pantalla de éxito post-venta del POS, agregar un botón 'Repetir' que pre-carga el mismo producto, misma cantidad, mismo método de pago. Útil cuando Mati vende varios del mismo colchón seguidos.",
+      "acceptanceCriteria": [
+        "Hay un estado 'lastSaleConfig' que guarda {productId, quantity, paymentMethodId, discountPct} del lastSale",
+        "En handleConfirm, al completar exitosamente, setLastSaleConfig({ productId, quantity, paymentMethodId, discountPct })",
+        "En la pantalla de éxito, agregar un tercer botón 'Repetir venta' (entre Imprimir y Nueva Venta)",
+        "Click en 'Repetir venta': llamar a una función repeatSale() que: (1) resetForm() para limpiar, (2) esperar un tick (setTimeout 0), (3) cargar el producto del lastSaleConfig buscándolo en los productos disponibles y llamando handleSelectProduct, (4) setQuantity(lastSaleConfig.quantity), (5) setSelectedPaymentMethod(lastSaleConfig.paymentMethodId)",
+        "El botón 'Repetir' usa variant='outline' con ícono RotateCcw de lucide-react",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/pos/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-06",
+      "title": "Ventas — Quick-filter 'Cobros pendientes' en un click",
+      "passes": true,
+      "priority": 6,
+      "description": "Agregar un botón de atajo en la página de Ventas (en la barra de filtros o en el PageHeader) que pre-aplica el filtro de estado 'pending' para ver rápidamente todas las ventas sin cobrar. Eliminar también la necesidad de buscar en el dropdown.",
+      "acceptanceCriteria": [
+        "En el PageHeader actions de ventas, agregar un Button con variant='outline' que diga 'Cobros pendientes' con ícono Clock",
+        "Click en ese botón: setStatusFilter('pending')",
+        "Si ya está el filtro aplicado (statusFilter === 'pending'), el botón tiene un estilo activo: variant='default' o bg-primary/10 text-primary",
+        "Al filtrar por pendientes, aparece el banner de filtros activos normal (ya existente) con el botón limpiar",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/ventas/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-07",
+      "title": "Sidebar — Sección 'Hoy' como entry point diario",
+      "passes": true,
+      "priority": 7,
+      "description": "Agregar 'Hoy' como el primer ítem del primaryNav del sidebar (antes de Tablero). Navega a /tablero. El ítem tiene un ícono de sol (Sun de lucide-react) y texto 'Hoy'. Visualmente se distingue del resto — es el punto de entrada para el ritual matutino.",
+      "acceptanceCriteria": [
+        "primaryNav ahora empieza con: { title: 'Hoy', href: '/tablero', icon: Sun }",
+        "Importar Sun desde lucide-react",
+        "El ítem 'Hoy' usa el mismo active state que el resto (border-l-2 border-primary cuando pathname === '/tablero')",
+        "El ítem 'Tablero' es REMOVIDO del primaryNav para evitar duplicar (el ítem Hoy reemplaza a Tablero)",
+        "El nombre de la página en PageHeader del tablero sigue siendo 'Tablero' — solo cambia el sidebar",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/components/shared/sidebar.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-08",
+      "title": "Tablero — Meta mensual de ventas con progress bar",
+      "passes": true,
+      "priority": 8,
+      "description": "Agregar una sección 'Meta del mes' en el tablero donde Mati puede establecer su objetivo de ventas mensual (guardado en localStorage). Muestra una progress bar naranja con el porcentaje alcanzado y cuánto falta. Solo se muestra cuando el preset es 'this_month' o 'today'.",
+      "acceptanceCriteria": [
+        "Hay un estado 'salesGoal' (number, default 0) leído de localStorage.getItem('clubiSalesGoal')",
+        "Si salesGoal === 0: mostrar un componente inline 'Establecer meta del mes' con un input numérico y botón Guardar. Al guardar: setear localStorage y salesGoal state. El input usa formateo ARS.",
+        "Si salesGoal > 0: mostrar una card compacta con: título 'Meta del mes', meta (ej: '$500.000'), progreso (ej: '$320.000 alcanzados'), porcentaje (64%), y una progress bar naranja (bg-primary) sobre fondo bg-muted rounded-full h-2",
+        "La card solo se muestra cuando preset === 'this_month' o preset === 'today'",
+        "Si el progreso supera el 100%: la barra es verde (bg-green-500) y hay un mensaje '¡Meta superada!'",
+        "Hay un botón pequeño 'Editar meta' (ícono pencil) que vuelve al modo de input",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/tablero/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-09",
+      "title": "Tablero — Streak de uso: días consecutivos registrando ventas",
+      "passes": true,
+      "priority": 9,
+      "description": "Mostrar un badge en el tablero con cuántos días consecutivos tiene Mati registrando ventas. Se calcula del lado cliente con localStorage (chequeamos si hubo ventas en los días previos usando los datos de dailySales). Si hay streak >= 3, mostrar el badge motivacional.",
+      "acceptanceCriteria": [
+        "Existe una función calcStreak(dailySales) que recibe el array de dailySales y calcula cuántos días consecutivos hasta hoy tuvo ventas > 0",
+        "Si streak >= 3: mostrar un badge en el tablero (dentro del PageHeader actions o como banner sutil) con: '🔥 X días seguidos'",
+        "El badge tiene className: 'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 border border-orange-200 font-medium'",
+        "Si streak < 3: no mostrar nada (para no desmotivar con rachas cortas)",
+        "Solo se muestra cuando hay datos (no en el loading skeleton ni en el SetupChecklist)",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/tablero/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-10",
+      "title": "POS — Celebración CSS en primera venta del día",
+      "passes": true,
+      "priority": 10,
+      "description": "En la pantalla de éxito del POS, si es la PRIMERA venta del día (salesCount === 1), mostrar una animación de celebración especial. Sin librerías externas — usar CSS keyframes con partículas simples o una animación de escala/brillo más pronunciada.",
+      "acceptanceCriteria": [
+        "En globals.css, agregar un @keyframes 'celebration-pulse' que hace: scale 1 → 1.15 → 1 con un glow naranja (box-shadow con var(--primary))",
+        "En el success state del POS, si salesCount === 1: agregar clase 'first-sale-of-day' al CheckCircle2 wrapper",
+        "El wrapper con 'first-sale-of-day' usa la animación celebration-pulse con duration 600ms",
+        "Además, si salesCount === 1: mostrar un mensaje especial debajo del total: '¡Primera venta del día!' con un emoji 🎉 y texto en color primary",
+        "Si salesCount > 1: el mensaje normal 'Venta #N del día' sin cambios",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/pos/page.tsx",
+        "src/app/globals.css"
+      ]
+    },
+    {
+      "id": "story-r2-11",
+      "title": "Tablero — Comparación 'Hoy vs promedio diario'",
+      "passes": true,
+      "priority": 11,
+      "description": "Cuando el preset es 'Hoy', agregar debajo del total de ventas del día una comparación con el promedio diario del mes actual. Ej: 'Hoy: $45.000 · Promedio del mes: $38.000 (+18%)'. Esto da contexto inmediato sin necesidad de ir al tablero mensual.",
+      "acceptanceCriteria": [
+        "Solo aplica cuando preset === 'today'",
+        "El promedio diario = data.kpis.totalVentas del mes actual (this_month) dividido por los días transcurridos del mes",
+        "Para obtener el total mensual en modo 'today': necesitamos una segunda consulta al tablero con preset 'this_month'. Alternativa más simple: calcular el promedio desde data.charts.dailySales (que siempre incluye todos los días del período seleccionado)",
+        "Mostrar debajo del stat card 'Ventas Totales': un texto xs con 'Promedio diario este mes: $X' y si el de hoy es mayor: badge verde con '▲ X%', si es menor: badge ámbar con '▼ X%'",
+        "Usar el prop 'trend' que ya existe en StatCard para esto: pasar trend={{ value: diffPct, isPositive: hoyMayorQuePromedio, label: 'vs promedio' }}",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/app/(dashboard)/tablero/page.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-12",
+      "title": "Clubi — Acción 'registrar_cobro' para cobrar ventas desde el chat",
+      "passes": true,
+      "priority": 12,
+      "description": "Permitir que Clubi registre cobros de ventas pendientes. Cuando el usuario dice 'cobré la venta de ayer' o 'registrá el cobro de $X', Clubi puede emitir una acción registrar_cobro. El endpoint busca la venta más reciente pendiente y registra el cobro con el monto indicado.",
+      "acceptanceCriteria": [
+        "En /api/chat/action/route.ts: agregar manejo para tipo === 'registrar_cobro' con datos: {sale_id?: string, monto: number, metodo?: string}",
+        "Si no viene sale_id: buscar la venta más reciente con status 'pending' o 'partial' del accountId",
+        "Usar db.salePayment.create para registrar el pago y db.sale.update para recalcular el status (paid si monto >= totalRestante, partial si monto < totalRestante)",
+        "En /api/chat/route.ts SYSTEM_PROMPT: agregar en la sección ACCIONES: el formato de registrar_cobro con ejemplo",
+        "En ai-assistant.tsx: getActionLabel maneja 'registrar_cobro' → 'Registrando cobro de $X'",
+        "getSuccessDetail maneja 'registrar_cobro' → nombre de la venta + nuevo estado",
+        "Build pasa sin errores TypeScript"
+      ],
+      "files": [
+        "src/app/api/chat/action/route.ts",
+        "src/app/api/chat/route.ts",
+        "src/components/shared/ai-assistant.tsx"
+      ]
+    },
+    {
+      "id": "story-r2-13",
+      "title": "Sidebar — Reestructuración: operaciones diarias vs setup",
+      "passes": true,
+      "priority": 13,
+      "description": "Reorganizar el sidebar para separar claramente las 'operaciones diarias' (las que Mati usa todos los días) de las 'configuraciones' (que solo toca al principio). El sidebar se vuelve menos ruidoso y más enfocado.",
+      "acceptanceCriteria": [
+        "primaryNav queda con: Hoy (/tablero), Ventas (/ventas), Compras (/compras), Punto de Venta (/pos)",
+        "El bloque de Finanzas (colapsable) se mantiene igual",
+        "Los items de 'Configuración' (Productos, Proveedores, Clasificaciones, Mercadería, Facturación) se mueven al DropdownMenu de Configuración del footer — ya están ahí, pero ahora Facturación también va al dropdown si no estaba",
+        "Agregar una sección de label 'OPERACIONES' encima del primaryNav (texto: font-bold text-[10px] uppercase tracking-widest text-muted-foreground/50 px-3 mb-1)",
+        "Agregar una sección de label 'FINANZAS' encima del bloque colapsable",
+        "No agregar sección de label encima del footer/settings — sigue igual",
+        "Build pasa sin errores"
+      ],
+      "files": [
+        "src/components/shared/sidebar.tsx"
+      ]
+    }
+  ]
+}

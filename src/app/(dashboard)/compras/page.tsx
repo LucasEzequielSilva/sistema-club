@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -19,9 +21,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PurchaseDialog } from "./components/purchase-dialog";
 import { PurchaseDetail } from "./components/purchase-detail";
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
+import { ShoppingCart, MoreHorizontal, Loader2 } from "lucide-react";
+import { useConfirm } from "@/hooks/use-confirm";
 
 const ACCOUNT_ID = "test-account-id";
 
@@ -56,23 +70,20 @@ type SummaryData = {
   totalImpuestos: number;
 };
 
-const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
-  pending: {
-    label: "Pendiente",
-    className: "bg-amber-100 text-amber-700 border-amber-200",
-  },
-  partial: {
-    label: "Parcial",
-    className: "bg-blue-100 text-blue-700 border-blue-200",
-  },
-  paid: {
-    label: "Pagado",
-    className: "bg-green-100 text-green-700 border-green-200",
-  },
-  overdue: {
-    label: "Vencido",
-    className: "bg-red-100 text-red-700 border-red-200",
-  },
+type StatusVariant = "default" | "success" | "danger" | "warning" | "info" | "muted";
+
+const STATUS_CONFIG: Record<string, { label: string; variant: StatusVariant }> = {
+  pending: { label: "Pendiente", variant: "warning" },
+  partial: { label: "Parcial", variant: "info" },
+  paid: { label: "Pagado", variant: "success" },
+  overdue: { label: "Vencido", variant: "danger" },
+};
+
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  pending: "bg-amber-100 text-amber-700 border-amber-200",
+  partial: "bg-blue-100 text-blue-700 border-blue-200",
+  paid: "bg-green-100 text-green-700 border-green-200",
+  overdue: "bg-red-100 text-red-700 border-red-200",
 };
 
 const COST_TYPE_LABELS: Record<string, string> = {
@@ -98,6 +109,7 @@ function formatDate(d: Date | string) {
 }
 
 export default function ComprasPage() {
+  const router = useRouter();
   const [purchases, setPurchases] = useState<PurchaseListItem[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,6 +124,13 @@ export default function ComprasPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+
+  const [confirmDelete, ConfirmDialog] = useConfirm({
+    title: "Eliminar compra",
+    description: "Se revertirá el movimiento de stock (si aplica). Esta acción no se puede deshacer.",
+    confirmLabel: "Eliminar",
+    destructive: true,
+  });
 
   const loadPurchases = useCallback(async () => {
     setLoading(true);
@@ -150,12 +169,7 @@ export default function ComprasPage() {
   }, [loadPurchases]);
 
   const handleDelete = async (id: string) => {
-    if (
-      !confirm(
-        "¿Eliminar esta compra? Se revertirá el movimiento de stock (si aplica). Esta acción no se puede deshacer."
-      )
-    )
-      return;
+    if (!(await confirmDelete())) return;
     try {
       await trpc.compras.delete.mutate({ id });
       toast.success("Compra eliminada");
@@ -247,38 +261,71 @@ export default function ComprasPage() {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-start">
-        <div>
-          <h1 className="text-3xl font-bold">Compras / Egresos</h1>
-          <p className="text-gray-500 mt-1">
-            {loading
-              ? "Cargando..."
-              : `${purchases.length} registro${purchases.length !== 1 ? "s" : ""}`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={exportCSV}
-            disabled={purchases.length === 0}
-          >
-            Exportar CSV
-          </Button>
-          <Button
-            onClick={() => {
-              setEditingId(null);
-              setShowDialog(true);
-            }}
-          >
-            + Nueva Compra
-          </Button>
-        </div>
-      </div>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <PageHeader
+        title="Compras"
+        description="Registro de egresos y pagos a proveedores"
+        icon={ShoppingCart}
+        actions={
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={exportCSV}
+              disabled={purchases.length === 0}
+            >
+              Exportar CSV
+            </Button>
+            <Button
+              onClick={() => {
+                setEditingId(null);
+                setShowDialog(true);
+              }}
+            >
+              + Nueva Compra
+            </Button>
+          </div>
+        }
+      />
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3 items-center">
+      {/* KPI Cards */}
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard
+            title="Total Egresos"
+            value={formatCurrency(summary.totalPurchases)}
+            subtitle={`${summary.countPurchases} registros`}
+            variant="danger"
+          />
+          <StatCard
+            title="Pagado"
+            value={formatCurrency(summary.totalPaid)}
+            variant="muted"
+          />
+          <StatCard
+            title="Pendiente"
+            value={formatCurrency(summary.totalPending)}
+            variant="warning"
+          />
+          <StatCard
+            title="C. Variables"
+            value={formatCurrency(summary.totalVariable)}
+            variant="warning"
+          />
+          <StatCard
+            title="C. Fijos"
+            value={formatCurrency(summary.totalFijo)}
+            variant="muted"
+          />
+          <StatCard
+            title="Impuestos"
+            value={formatCurrency(summary.totalImpuestos)}
+            variant="muted"
+          />
+        </div>
+      )}
+
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border mb-4 flex-wrap">
         <Input
           placeholder="Buscar por descripción o factura..."
           value={search}
@@ -286,7 +333,7 @@ export default function ComprasPage() {
           className="w-[260px]"
         />
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Desde:</span>
+          <span className="text-sm text-muted-foreground">Desde:</span>
           <Input
             type="date"
             value={dateFrom}
@@ -295,7 +342,7 @@ export default function ComprasPage() {
           />
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Hasta:</span>
+          <span className="text-sm text-muted-foreground">Hasta:</span>
           <Input
             type="date"
             value={dateTo}
@@ -324,59 +371,48 @@ export default function ComprasPage() {
         )}
       </div>
 
-      {/* Summary Cards */}
-      {summary && (
-        <div className="grid grid-cols-5 gap-3">
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Total Egresos</p>
-            <p className="text-lg font-bold">
-              {formatCurrency(summary.totalPurchases)}
-            </p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Pagado</p>
-            <p className="text-lg font-bold">
-              {formatCurrency(summary.totalPaid)}
-            </p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Pendiente de Pago</p>
-            <p className="text-lg font-bold text-amber-600">
-              {formatCurrency(summary.totalPending)}
-            </p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">C. Variables</p>
-            <p className="text-lg font-bold text-blue-600">
-              {formatCurrency(summary.totalVariable)}
-            </p>
-            <p className="text-[10px] text-gray-400">
-              Fijos: {formatCurrency(summary.totalFijo)}
-            </p>
-          </div>
-          <div className="border rounded-lg p-3">
-            <p className="text-xs text-gray-500">Impuestos</p>
-            <p className="text-lg font-bold text-red-600">
-              {formatCurrency(summary.totalImpuestos)}
-            </p>
-            <p className="text-[10px] text-gray-400">
-              {summary.countPurchases} registros
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Table */}
       {loading ? (
-        <div className="text-center py-16 text-gray-400">Cargando...</div>
-      ) : purchases.length === 0 ? (
-        <div className="text-center py-16 text-gray-400">
-          {hasFilters
-            ? "Sin resultados para los filtros aplicados"
-            : "No hay compras. Registrá una para comenzar."}
+        <div className="rounded-lg border border-border overflow-hidden">
+          <div className="bg-muted/30 px-4 py-3 border-b border-border">
+            <div className="grid grid-cols-9 gap-3 animate-pulse">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="h-3 bg-muted rounded" />
+              ))}
+            </div>
+          </div>
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="grid grid-cols-9 gap-3 px-4 py-3 border-b border-border last:border-0 animate-pulse">
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-3 w-28 bg-muted rounded" />
+              <div className="h-3 w-20 bg-muted rounded" />
+              <div className="h-3 w-16 bg-muted rounded" />
+              <div className="h-3 w-8 bg-muted rounded mx-auto" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-3 w-16 bg-muted rounded ml-auto" />
+              <div className="h-5 w-14 bg-muted rounded mx-auto" />
+              <div className="h-3 w-6 bg-muted rounded ml-auto" />
+            </div>
+          ))}
         </div>
+      ) : purchases.length === 0 ? (
+        hasFilters ? (
+          <div className="text-center py-16 text-muted-foreground">
+            Sin resultados para los filtros aplicados
+          </div>
+        ) : (
+          <div className="rounded-xl border border-border bg-card">
+            <EmptyState
+              icon={ShoppingCart}
+              title="Sin compras registradas"
+              description="Antes de registrar compras, asegurate de tener proveedores cargados."
+              actionLabel="Ver Proveedores"
+              onAction={() => router.push("/proveedores")}
+            />
+          </div>
+        )
       ) : (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow>
@@ -393,10 +429,11 @@ export default function ComprasPage() {
             </TableHeader>
             <TableBody>
               {purchases.map((p) => {
-                const cfg = STATUS_CONFIG[p.status] || STATUS_CONFIG.pending;
                 const conceptLabel = p.product?.name || p.description || "—";
+                const statusClass = STATUS_BADGE_CLASS[p.status] || STATUS_BADGE_CLASS.pending;
+                const statusLabel = STATUS_CONFIG[p.status]?.label || p.status;
                 return (
-                  <TableRow key={p.id}>
+                  <TableRow key={p.id} className="hover:bg-muted/40">
                     <TableCell className="text-sm">
                       <div
                         className="cursor-pointer hover:underline"
@@ -411,14 +448,14 @@ export default function ComprasPage() {
                         onClick={() => setDetailId(p.id)}
                       >
                         <span className="font-medium">{conceptLabel}</span>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-muted-foreground">
                           {COST_TYPE_LABELS[p.costCategory.costType] ||
                             p.costCategory.costType}
                           {p.invoiceNumber && ` | Fact. ${p.invoiceNumber}`}
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-gray-500 text-sm">
+                    <TableCell className="text-muted-foreground text-sm">
                       {p.supplier?.name || "—"}
                     </TableCell>
                     <TableCell className="text-sm">
@@ -427,37 +464,47 @@ export default function ComprasPage() {
                     <TableCell className="text-center font-mono text-sm">
                       {p.quantity}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm">
+                    <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
                       {formatCurrency(p.subtotal)}
                     </TableCell>
-                    <TableCell className="text-right font-mono text-sm font-medium">
+                    <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
                       {formatCurrency(p.total)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.className}`}
+                        className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium border ${statusClass}`}
                       >
-                        {cfg.label}
+                        {statusLabel}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex gap-1 justify-end">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setDetailId(p.id)}
-                        >
-                          Ver
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-500 border-red-300 hover:bg-red-50"
-                          onClick={() => handleDelete(p.id)}
-                        >
-                          Eliminar
-                        </Button>
-                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-7 w-7">
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setDetailId(p.id)}>
+                            Ver detalle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setEditingId(p.id);
+                              setShowDialog(true);
+                            }}
+                          >
+                            Agregar pago
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => handleDelete(p.id)}
+                          >
+                            Eliminar
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 );
@@ -478,6 +525,7 @@ export default function ComprasPage() {
         accountId={ACCOUNT_ID}
         editingId={editingId}
       />
+      {ConfirmDialog}
     </div>
   );
 }

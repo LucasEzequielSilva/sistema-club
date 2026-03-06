@@ -1,0 +1,55 @@
+Sistema Club
+
+Gestión comercial
+
+OPERACIONES
+
+Hoy
+Ventas
+Compras
+Punto de Venta
+
+FINANZAS
+
+Finanzas
+
+CATÁLOGOS
+
+Catálogos
+M
+
+Mati
+
+Administrador
+
+Punto de Venta
+
+Venta rápida
+
+0
+ventas hoy
+$ 0,00
+total
+jueves, 5 de marzo
+LISTA DE PRECIOS
+Minorista (Default)
+Minorista
+BUSCAR PRODUCTO
+
+Buscá un producto para comenzar
+
+RESUMEN
+Seleccioná un producto para comenzar
+Confirmar Venta
+
+Ctrl + ↵ para confirmar rápido
+
+Clubi
+
+Estás en Punto de Venta
+
+¿Cómo arranco?
+¿Cómo registro una venta?
+¿Cómo vengo este mes?
+0
+0/5 · Configuración

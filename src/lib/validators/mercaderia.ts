@@ -5,7 +5,7 @@ import { z } from "zod";
 // ============================================================
 
 export const createMerchandiseEntrySchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   productId: z.string().cuid("Producto es obligatorio"),
 
   quantity: z.number().min(0.01, "La cantidad debe ser mayor a 0"),
@@ -23,7 +23,7 @@ export const createMerchandiseEntrySchema = z.object({
 // ============================================================
 
 export const createStockAdjustmentSchema = z.object({
-  accountId: z.string().cuid("Invalid account ID"),
+  accountId: z.string().min(1, "Account ID requerido"),
   productId: z.string().cuid("Producto es obligatorio"),
 
   adjustmentType: z.enum(["recount", "loss", "damage", "other"], {

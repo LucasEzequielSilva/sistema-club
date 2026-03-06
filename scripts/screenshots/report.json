@@ -1,0 +1,99 @@
+{
+  "bugs": [
+    {
+      "severity": "HIGH",
+      "description": "After confirming sale, no success feedback (modal/message) visible"
+    },
+    {
+      "severity": "HIGH",
+      "description": "'ventas hoy' counter NOT updated after sale: was 0, still 0"
+    },
+    {
+      "severity": "HIGH",
+      "description": "'total' amount NOT updated after sale: was 0,00, still 0,00"
+    }
+  ],
+  "ux_issues": [
+    "DESCUENTO label shown but no input field found"
+  ],
+  "console_errors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+      "location": "{'url': 'http://localhost:3001/api/trpc/ventas.create?batch=1', 'lineNumber': 0, 'columnNumber': 0}"
+    }
+  ],
+  "console_warnings": [],
+  "total_console_messages": 15,
+  "screenshots": [
+    "01_initial_page.png",
+    "01_landing.png",
+    "01_login_page.png",
+    "02_login_filled.png",
+    "02_login_page.png",
+    "02_pos_initial_state.png",
+    "03_after_login.png",
+    "03_before_search.png",
+    "03_login_filled.png",
+    "04_after_login.png",
+    "04_after_onboarding_bypass.png",
+    "04_onboarding_welcome.png",
+    "04_pos_initial.png",
+    "04_search_results_col.png",
+    "05_onboarding_start.png",
+    "05_product_selected.png",
+    "05_search_results_col.png",
+    "05_tablero_full.png",
+    "05_wizard_step1_categorias.png",
+    "06_cart_after_add.png",
+    "06_product_detail_panel.png",
+    "06_tablero_dashboard.png",
+    "06_wizard_step1_after_colchones.png",
+    "06_wizard_step1_categorias.png",
+    "06_wizard_step1_colchones_check.png",
+    "07_qty_incremented.png",
+    "07_quantity_controls.png",
+    "07_tablero_filter_active.png",
+    "07_wizard_step1_colchones_selected.png",
+    "07_wizard_step2_proveedor.png",
+    "08_productos_full.png",
+    "08_wizard_step2_filled.png",
+    "08_wizard_step2_proveedor.png",
+    "09_confirm_button_state.png",
+    "09_productos_nuevo_form.png",
+    "09_wizard_step2_after_agregar.png",
+    "09_wizard_step2_filled.png",
+    "10_after_confirm_click.png",
+    "10_productos_after_close.png",
+    "10_wizard_step2_after_agregar.png",
+    "10_wizard_step3_producto.png",
+    "11_pos_fresh_state.png",
+    "11_proveedores_full.png",
+    "11_sale_result.png",
+    "11_wizard_step3_filled.png",
+    "11_wizard_step3_producto.png",
+    "12_clasificaciones_full.png",
+    "12_pos_after_sale_stats.png",
+    "12_wizard_step3_after_agregar.png",
+    "12_wizard_step3_filled.png",
+    "13_clasificaciones_tab_0_Productos.png",
+    "13_clasificaciones_tab_1_Costos.png",
+    "13_clasificaciones_tab_2_Métodos_de_Pago.png",
+    "13_search_no_results.png",
+    "13_wizard_step3_after_agregar.png",
+    "13_wizard_step4_cobros.png",
+    "14_pos_final_overview.png",
+    "14_sidebar_footer.png",
+    "14_wizard_step4_cobros.png",
+    "15_pos_mobile_view.png",
+    "15_wizard_step4_after_continue.png",
+    "16_clientes_full.png",
+    "16_compras_full.png",
+    "16_ventas_full.png",
+    "16_wizard_step5_final.png",
+    "16b_wizard_final_no_button.png",
+    "17_tablero.png",
+    "99_final_tablero.png",
+    "ERROR_fatal.png"
+  ]
+}

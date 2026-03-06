@@ -1,6 +1,5 @@
-// Prisma 7 with client engine requires an adapter for SQLite
 import { PrismaClient } from "@/generated/prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaPg } from "@prisma/adapter-pg";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -8,10 +7,8 @@ declare global {
 }
 
 function createPrismaClient() {
-  // Prisma CLI creates dev.db at the project root (cwd).
-  // The libsql adapter also resolves relative to cwd.
-  // So we use "file:dev.db" to match where `prisma migrate dev` puts the DB.
-  const adapter = new PrismaLibSql({ url: "file:dev.db" });
+  const connectionString = process.env.DATABASE_URL!;
+  const adapter = new PrismaPg({ connectionString });
   return new PrismaClient({ adapter } as any);
 }
 
