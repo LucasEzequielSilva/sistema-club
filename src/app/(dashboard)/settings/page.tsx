@@ -8,8 +8,6 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Check, Eye, EyeOff, ShieldCheck, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ACCOUNT_ID = "test-account-id";
-
 type UserRow = {
   id: string;
   email: string;
@@ -23,6 +21,7 @@ type FormState = { email: string; password: string; name: string; role: "admin" 
 const EMPTY_FORM: FormState = { email: "", password: "", name: "", role: "admin" };
 
 export default function SettingsPage() {
+  const [accountId, setAccountId] = useState<string | null>(null);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -35,10 +34,10 @@ export default function SettingsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (aid: string) => {
     setLoading(true);
     try {
-      const result = await trpc.users.list.query({ accountId: ACCOUNT_ID });
+      const result = await trpc.users.list.query({ accountId: aid });
       setUsers(result as UserRow[]);
     } catch {
       toast.error("Error al cargar los usuarios.");
@@ -47,17 +46,28 @@ export default function SettingsPage() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.accountId) {
+          setAccountId(data.accountId);
+          load(data.accountId);
+        }
+      })
+      .catch(() => toast.error("Error al obtener la sesión."));
+  }, [load]);
 
   const handleCreate = async () => {
+    if (!accountId) return;
     if (!form.email || !form.password) return toast.error("Email y contraseña son obligatorios.");
     setSaving(true);
     try {
-      await trpc.users.create.mutate({ accountId: ACCOUNT_ID, ...form });
+      await trpc.users.create.mutate({ accountId, ...form });
       toast.success("Usuario creado.");
       setShowForm(false);
       setForm(EMPTY_FORM);
-      load();
+      load(accountId);
     } catch (e: any) {
       toast.error(e.message ?? "Error al crear usuario.");
     } finally {
@@ -72,14 +82,15 @@ export default function SettingsPage() {
   };
 
   const handleUpdate = async (id: string) => {
+    if (!accountId) return;
     setEditSaving(true);
     try {
-      const payload: any = { id, accountId: ACCOUNT_ID, name: editForm.name, role: editForm.role, isActive: editForm.isActive };
+      const payload: any = { id, accountId, name: editForm.name, role: editForm.role, isActive: editForm.isActive };
       if (editForm.password) payload.password = editForm.password;
       await trpc.users.update.mutate(payload);
       toast.success("Usuario actualizado.");
       setEditingId(null);
-      load();
+      load(accountId);
     } catch (e: any) {
       toast.error(e.message ?? "Error al actualizar.");
     } finally {
@@ -88,12 +99,13 @@ export default function SettingsPage() {
   };
 
   const handleDelete = async (u: UserRow) => {
+    if (!accountId) return;
     if (!confirm(`¿Eliminar a ${u.name ?? u.email}?`)) return;
     setDeletingId(u.id);
     try {
-      await trpc.users.delete.mutate({ id: u.id, accountId: ACCOUNT_ID });
+      await trpc.users.delete.mutate({ id: u.id, accountId });
       toast.success("Usuario eliminado.");
-      load();
+      load(accountId);
     } catch (e: any) {
       toast.error(e.message ?? "Error al eliminar.");
     } finally {
