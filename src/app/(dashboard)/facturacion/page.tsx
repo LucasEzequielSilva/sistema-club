@@ -34,8 +34,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { InvoiceDialog } from "./components/invoice-dialog";
 import { AfipConfigForm } from "./components/afip-config-form";
 import { InvoiceDetail } from "./components/invoice-detail";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -57,6 +56,7 @@ function formatDate(d: Date | string) {
 type Invoice = any;
 
 export default function FacturacionPage() {
+  const { accountId } = useAccountId();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [summary, setSummary] = useState<any>(null);
@@ -76,14 +76,15 @@ export default function FacturacionPage() {
   }, [search]);
 
   const loadData = () => {
+    if (!accountId) return;
     setLoading(true);
     Promise.all([
       trpc.facturacion.list.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         ...(typeFilter && { invoiceType: typeFilter }),
         ...(debouncedSearch && { search: debouncedSearch }),
       }),
-      trpc.facturacion.getSummary.query({ accountId: ACCOUNT_ID }),
+      trpc.facturacion.getSummary.query({ accountId }),
     ])
       .then(([invs, sum]) => {
         setInvoices(invs);
@@ -355,7 +356,7 @@ export default function FacturacionPage() {
         {/* ── TAB: Config AFIP ── */}
         <TabsContent value="config">
           <div className="rounded-xl border border-border bg-card p-5">
-            <AfipConfigForm accountId={ACCOUNT_ID} />
+            <AfipConfigForm accountId={accountId ?? ""} />
           </div>
         </TabsContent>
       </Tabs>
@@ -369,7 +370,7 @@ export default function FacturacionPage() {
           setShowCreate(false);
           loadData();
         }}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
       />
 
       {/* Invoice Detail */}

@@ -24,8 +24,7 @@ import { toast } from "sonner";
 import { Target, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number | null | undefined) {
   if (n === null || n === undefined) return "—";
@@ -64,6 +63,7 @@ const MONTHS = [
 ];
 
 export default function CuadroResumenPage() {
+  const { accountId } = useAccountId();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -77,10 +77,11 @@ export default function CuadroResumenPage() {
   const [saving, setSaving] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const result = await trpc.cuadroResumen.getScorecard.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         year,
         month,
       });
@@ -95,7 +96,7 @@ export default function CuadroResumenPage() {
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [year, month, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadData, 300);
@@ -103,10 +104,11 @@ export default function CuadroResumenPage() {
   }, [loadData]);
 
   const saveProjection = async () => {
+    if (!accountId) return;
     setSaving(true);
     try {
       await trpc.cashflow.upsertProjection.mutate({
-        accountId: ACCOUNT_ID,
+        accountId,
         year,
         month,
         projectedSales: projSales ? parseFloat(projSales) : null,

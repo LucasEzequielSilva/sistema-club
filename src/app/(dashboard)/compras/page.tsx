@@ -36,8 +36,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
 import { ShoppingCart, MoreHorizontal, Loader2 } from "lucide-react";
 import { useConfirm } from "@/hooks/use-confirm";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 type PurchaseListItem = {
   id: string;
@@ -109,6 +108,7 @@ function formatDate(d: Date | string) {
 }
 
 export default function ComprasPage() {
+  const { accountId } = useAccountId();
   const router = useRouter();
   const [purchases, setPurchases] = useState<PurchaseListItem[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
@@ -133,10 +133,11 @@ export default function ComprasPage() {
   });
 
   const loadPurchases = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const params: any = {
-        accountId: ACCOUNT_ID,
+        accountId,
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(dateFrom && { dateFrom: new Date(dateFrom) }),
         ...(dateTo && {
@@ -147,7 +148,7 @@ export default function ComprasPage() {
       const [result, summaryResult] = await Promise.all([
         trpc.compras.list.query(params),
         trpc.compras.getSummary.query({
-          accountId: ACCOUNT_ID,
+          accountId,
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
           ...(dateTo && {
             dateTo: new Date(dateTo + "T23:59:59"),
@@ -161,7 +162,7 @@ export default function ComprasPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, dateFrom, dateTo, search]);
+  }, [statusFilter, dateFrom, dateTo, search, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadPurchases, 300);
@@ -522,7 +523,7 @@ export default function ComprasPage() {
           setEditingId(null);
         }}
         onSuccess={handleDialogSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
         editingId={editingId}
       />
       {ConfirmDialog}

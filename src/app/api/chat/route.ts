@@ -1,28 +1,35 @@
 import { NextRequest } from "next/server";
 import Groq from "groq-sdk";
 import { db } from "@/server/db";
+import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
 
 export const runtime = "nodejs";
 
-const ACCOUNT_ID = "test-account-id";
-
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY || "" });
 
+// ─── Helpers para leer accountId desde la sesión ────────────────────────────
+async function getAccountIdFromRequest(req: NextRequest): Promise<string | null> {
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  const session = await verifySessionToken(token);
+  return session?.accountId ?? null;
+}
+
 // ─── Contexto del negocio desde la DB ───────────────────────────────────────
-async function getBusinessContext() {
+async function getBusinessContext(accountId: string) {
   try {
     const [products, categoryList, paymentMethods, suppliers, salesCount, purchasesCount] =
       await Promise.all([
-        db.product.count({ where: { isActive: true } }),
+        db.product.count({ where: { accountId, isActive: true } }),
         db.productCategory.findMany({
-          where: { accountId: ACCOUNT_ID, isActive: true },
+          where: { accountId, isActive: true },
           select: { name: true },
           orderBy: { name: "asc" },
         }),
-        db.paymentMethod.count({ where: { isActive: true } }),
-        db.supplier.count({ where: { isActive: true } }),
-        db.sale.count(),
-        db.purchase.count(),
+        db.paymentMethod.count({ where: { accountId, isActive: true } }),
+        db.supplier.count({ where: { accountId, isActive: true } }),
+        db.sale.count({ where: { accountId } }),
+        db.purchase.count({ where: { accountId } }),
       ]);
     const catNames = categoryList.map((c) => c.name).join(", ");
     const catCount = categoryList.length;
@@ -36,10 +43,10 @@ async function getBusinessContext() {
 }
 
 // ─── Cargar memorias del usuario ─────────────────────────────────────────────
-async function loadMemories(): Promise<string> {
+async function loadMemories(accountId: string): Promise<string> {
   try {
     const memories = await db.userMemory.findMany({
-      where: { accountId: ACCOUNT_ID },
+      where: { accountId },
       orderBy: { updatedAt: "desc" },
       take: 40,
     });
@@ -61,7 +68,8 @@ async function loadMemories(): Promise<string> {
 // ─── Auto-extraer y guardar memorias post-conversación ───────────────────────
 async function extractAndSaveMemories(
   userMessage: string,
-  assistantResponse: string
+  assistantResponse: string,
+  accountId: string
 ) {
   try {
     const extraction = await groq.chat.completions.create({
@@ -97,14 +105,14 @@ No incluyas información trivial, saludos, ni cosas que ya son obvias del sistem
       // Evitar duplicados similares (comparación simple)
       const existing = await db.userMemory.findFirst({
         where: {
-          accountId: ACCOUNT_ID,
+          accountId,
           content: { contains: mem.content.slice(0, 30) },
         },
       });
       if (!existing) {
         await db.userMemory.create({
           data: {
-            accountId: ACCOUNT_ID,
+            accountId,
             category: mem.category,
             content: mem.content,
             source: "auto",
@@ -164,6 +172,11 @@ REGLAS DE ACCIONES:
 // ─── POST /api/chat ──────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const accountId = await getAccountIdFromRequest(req);
+    if (!accountId) {
+      return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401, headers: { "Content-Type": "application/json" } });
+    }
+
     const { messages, currentPage } = await req.json();
 
     if (!process.env.GROQ_API_KEY) {
@@ -174,8 +187,8 @@ export async function POST(req: NextRequest) {
     }
 
     const [businessContext, memoriesContext] = await Promise.all([
-      getBusinessContext(),
-      loadMemories(),
+      getBusinessContext(accountId),
+      loadMemories(accountId),
     ]);
 
     const systemFull = [
@@ -213,7 +226,7 @@ export async function POST(req: NextRequest) {
         // ── Post-stream: extraer memorias en background ──
         const lastUserMsg = [...messages].reverse().find((m: any) => m.role === "user");
         if (lastUserMsg && fullResponse) {
-          extractAndSaveMemories(lastUserMsg.content, fullResponse).catch(() => {});
+          extractAndSaveMemories(lastUserMsg.content, fullResponse, accountId).catch(() => {});
         }
       },
     });
@@ -234,10 +247,12 @@ export async function POST(req: NextRequest) {
 }
 
 // ─── GET /api/chat — listar memorias ─────────────────────────────────────────
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const accountId = await getAccountIdFromRequest(req);
+  if (!accountId) return new Response(JSON.stringify([]), { headers: { "Content-Type": "application/json" } });
   try {
     const memories = await db.userMemory.findMany({
-      where: { accountId: ACCOUNT_ID },
+      where: { accountId },
       orderBy: { createdAt: "desc" },
     });
     return new Response(JSON.stringify(memories), {

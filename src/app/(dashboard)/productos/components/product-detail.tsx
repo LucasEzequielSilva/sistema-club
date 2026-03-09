@@ -9,8 +9,6 @@ import { ProductPricingTab } from "./product-pricing-tab";
 import { ProductStockTab } from "./product-stock-tab";
 import { toast } from "sonner";
 
-const ACCOUNT_ID = "test-account-id";
-
 interface ProductDetailProps {
   productId: string;
   onBack: () => void;

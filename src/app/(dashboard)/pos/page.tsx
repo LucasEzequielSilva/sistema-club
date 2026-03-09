@@ -26,8 +26,7 @@ import {
   Package,
   Loader2,
 } from "lucide-react";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 // ============================================================
 // Types
@@ -96,6 +95,7 @@ function formatDate(d: Date) {
 // ============================================================
 
 export default function PosPage() {
+  const { accountId } = useAccountId();
   // ── Lookups ──
   const [products, setProducts] = useState<Product[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
@@ -134,12 +134,13 @@ export default function PosPage() {
 
   // ── Load lookups on mount ──
   useEffect(() => {
+    if (!accountId) return;
     setLoadingLookups(true);
     Promise.all([
-      trpc.productos.list.query({ accountId: ACCOUNT_ID, isActive: true }),
-      trpc.productos.getPriceLists.query({ accountId: ACCOUNT_ID }),
+      trpc.productos.list.query({ accountId, isActive: true }),
+      trpc.productos.getPriceLists.query({ accountId }),
       trpc.clasificaciones.listPaymentMethods.query({
-        accountId: ACCOUNT_ID,
+        accountId,
       }),
     ])
       .then(([prods, lists, methods]: [any[], any[], any[]]) => {
@@ -177,7 +178,7 @@ export default function PosPage() {
       })
       .catch(() => toast.error("Error cargando datos iniciales"))
       .finally(() => setLoadingLookups(false));
-  }, []);
+  }, [accountId]);
 
   // ── Select product ── (declarado antes del search useEffect)
   const selectProduct = useCallback(
@@ -240,7 +241,7 @@ export default function PosPage() {
       .query({
         productId: selectedProduct.id,
         priceListId: selectedPriceListId,
-        accountId: ACCOUNT_ID,
+        accountId: accountId ?? "",
       })
       .then((p: any) => setPricing(p))
       .catch(() => setPricing(null));
@@ -371,7 +372,7 @@ export default function PosPage() {
     setSubmitting(true);
     try {
       const sale = await trpc.ventas.create.mutate({
-        accountId: ACCOUNT_ID,
+        accountId: accountId ?? "",
         productId: selectedProduct.id,
         categoryId: pricing.categoryId,
         priceListId: selectedPriceListId || null,

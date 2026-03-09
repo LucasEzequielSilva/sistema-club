@@ -35,8 +35,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { AccountDialog } from "./components/account-dialog";
 import { EntryDialog } from "./components/entry-dialog";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -62,6 +61,7 @@ const MONTHS = [
 type TabId = "cuentas" | "flujo";
 
 export default function CuentasPage() {
+  const { accountId } = useAccountId();
   const now = new Date();
   const [tab, setTab] = useState<TabId>("cuentas");
 
@@ -90,14 +90,15 @@ export default function CuentasPage() {
   });
 
   const loadAccounts = useCallback(async () => {
+    if (!accountId) return;
     setLoadingAccounts(true);
     try {
       const [accs, summary] = await Promise.all([
         trpc.cuentas.listAccounts.query({
-          accountId: ACCOUNT_ID,
+          accountId,
           includeInactive: true,
         }),
-        trpc.cuentas.getBalancesSummary.query({ accountId: ACCOUNT_ID }),
+        trpc.cuentas.getBalancesSummary.query({ accountId }),
       ]);
       setAccounts(accs);
       setBalanceSummary(summary);
@@ -106,7 +107,7 @@ export default function CuentasPage() {
     } finally {
       setLoadingAccounts(false);
     }
-  }, []);
+  }, [accountId]);
 
   useEffect(() => {
     loadAccounts();
@@ -154,13 +155,14 @@ export default function CuentasPage() {
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
 
   const loadFlow = useCallback(async () => {
+    if (!accountId) return;
     setLoadingFlow(true);
     try {
       const dateFrom = new Date(year, month, 1);
       const dateTo = new Date(year, month + 1, 0, 23, 59, 59);
 
       const result = await trpc.cuentas.getCashFlow.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         bankAccountId: flowBankAccountId === "all" ? undefined : flowBankAccountId,
         dateFrom,
         dateTo,
@@ -171,7 +173,7 @@ export default function CuentasPage() {
     } finally {
       setLoadingFlow(false);
     }
-  }, [year, month, flowBankAccountId]);
+  }, [year, month, flowBankAccountId, accountId]);
 
   useEffect(() => {
     if (tab === "flujo") {
@@ -527,7 +529,7 @@ export default function CuentasPage() {
           setEditingAccountId(null);
         }}
         onSuccess={handleAccountSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
         editingId={editingAccountId}
       />
 
@@ -536,7 +538,7 @@ export default function CuentasPage() {
         onOpenChange={setEntryDialogOpen}
         onClose={() => setEntryDialogOpen(false)}
         onSuccess={handleEntrySuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
         bankAccounts={activeAccounts.map((a) => ({ id: a.id, name: a.name }))}
       />
       {ConfirmDeleteAccountDialog}

@@ -32,8 +32,7 @@ import { toast } from "sonner";
 import { Waves, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -56,6 +55,7 @@ const MONTHS = [
 ];
 
 export default function CashflowPage() {
+  const { accountId } = useAccountId();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -75,10 +75,11 @@ export default function CashflowPage() {
   const [projSaving, setProjSaving] = useState(false);
 
   const loadData = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const result = await trpc.cashflow.getWeeklyProjection.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         year,
         month,
       });
@@ -99,7 +100,7 @@ export default function CashflowPage() {
     } finally {
       setLoading(false);
     }
-  }, [year, month]);
+  }, [year, month, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadData, 300);
@@ -107,12 +108,13 @@ export default function CashflowPage() {
   }, [loadData]);
 
   const openWeekDetail = async (weekIndex: number) => {
+    if (!accountId) return;
     setDetailWeek(weekIndex);
     setDetailOpen(true);
     setDetailLoading(true);
     try {
       const result = await trpc.cashflow.getWeekDetail.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         year,
         month,
         weekIndex,
@@ -126,10 +128,11 @@ export default function CashflowPage() {
   };
 
   const saveProjection = async () => {
+    if (!accountId) return;
     setProjSaving(true);
     try {
       await trpc.cashflow.upsertProjection.mutate({
-        accountId: ACCOUNT_ID,
+        accountId,
         year,
         month,
         projectedSales: projSales ? parseFloat(projSales) : null,

@@ -37,8 +37,7 @@ import {
   AlertTriangle,
   Loader2,
 } from "lucide-react";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 type StockMovementItem = {
   id: string;
@@ -125,6 +124,7 @@ function formatDate(d: Date | string) {
 type ViewMode = "movements" | "stock";
 
 export default function MercaderiaPage() {
+  const { accountId } = useAccountId();
   const [confirmDeleteMovement, ConfirmDeleteMovementDialog] = useConfirm({
     title: "Eliminar movimiento",
     description: "Se revertirá el efecto en stock. Esta acción no se puede deshacer.",
@@ -153,20 +153,22 @@ export default function MercaderiaPage() {
 
   // Load products for filter
   useEffect(() => {
+    if (!accountId) return;
     trpc.productos.list
-      .query({ accountId: ACCOUNT_ID, isActive: true })
+      .query({ accountId, isActive: true })
       .then((prods: any[]) =>
         setProducts(prods.map((p) => ({ id: p.id, name: p.name })))
       )
       .catch(() => {});
-  }, []);
+  }, [accountId]);
 
   const loadData = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       if (viewMode === "movements") {
         const result = await trpc.mercaderia.listMovements.query({
-          accountId: ACCOUNT_ID,
+          accountId,
           ...(typeFilter !== "all" && { movementType: typeFilter }),
           ...(productFilter !== "all" && { productId: productFilter }),
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
@@ -175,7 +177,7 @@ export default function MercaderiaPage() {
         setMovements(result as StockMovementItem[]);
       } else {
         const result = await trpc.mercaderia.getStockSummary.query({
-          accountId: ACCOUNT_ID,
+          accountId,
         });
         setStockSummary(result.products);
         setStockTotals(result.totals);
@@ -185,7 +187,7 @@ export default function MercaderiaPage() {
     } finally {
       setLoading(false);
     }
-  }, [viewMode, typeFilter, productFilter, dateFrom, dateTo]);
+  }, [viewMode, typeFilter, productFilter, dateFrom, dateTo, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadData, 300);
@@ -625,14 +627,14 @@ export default function MercaderiaPage() {
         open={showEntryDialog}
         onOpenChange={setShowEntryDialog}
         onSuccess={handleDialogSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
       />
 
       <StockAdjustmentDialog
         open={showAdjustmentDialog}
         onOpenChange={setShowAdjustmentDialog}
         onSuccess={handleDialogSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
       />
 
       {ConfirmDeleteMovementDialog}

@@ -7,10 +7,10 @@ import { ProductCategoriesTab } from "./components/product-categories-tab";
 import { CostCategoriesTab } from "./components/cost-categories-tab";
 import { PaymentMethodsTab } from "./components/payment-methods-tab";
 import { Tag } from "lucide-react";
-
-const ACCOUNT_ID = "test-account-id"; // TODO: Get from session/context
+import { useAccountId } from "@/hooks/use-account-id";
 
 export default function ClassificacionesPage() {
+  const { accountId } = useAccountId();
   const [activeTab, setActiveTab] = useState("productos");
 
   return (
@@ -29,15 +29,15 @@ export default function ClassificacionesPage() {
         </TabsList>
 
         <TabsContent value="productos" className="space-y-4">
-          <ProductCategoriesTab accountId={ACCOUNT_ID} />
+          <ProductCategoriesTab accountId={accountId ?? ""} />
         </TabsContent>
 
         <TabsContent value="costos" className="space-y-4">
-          <CostCategoriesTab accountId={ACCOUNT_ID} />
+          <CostCategoriesTab accountId={accountId ?? ""} />
         </TabsContent>
 
         <TabsContent value="pagos" className="space-y-4">
-          <PaymentMethodsTab accountId={ACCOUNT_ID} />
+          <PaymentMethodsTab accountId={accountId ?? ""} />
         </TabsContent>
       </Tabs>
     </div>

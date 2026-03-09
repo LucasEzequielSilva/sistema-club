@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { db } from "@/server/db";
-
-const ACCOUNT_ID = "test-account-id";
+import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
 
 const VALID_UNITS = ["unidad", "kg", "litro", "metro", "par"] as const;
 type ValidUnit = (typeof VALID_UNITS)[number];
@@ -12,6 +11,12 @@ type ValidUnit = (typeof VALID_UNITS)[number];
 // ─────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const token = req.cookies.get(COOKIE_NAME)?.value;
+    if (!token) return Response.json({ error: "No autorizado" }, { status: 401 });
+    const session = await verifySessionToken(token);
+    if (!session) return Response.json({ error: "No autorizado" }, { status: 401 });
+    const accountId = session.accountId;
+
     const body = await req.json();
     const { tipo } = body;
 
@@ -25,7 +30,7 @@ export async function POST(req: NextRequest) {
 
       // Resolver categoría por nombre (fuzzy, case-insensitive)
       const categories = await db.productCategory.findMany({
-        where: { accountId: ACCOUNT_ID, isActive: true },
+        where: { accountId, isActive: true },
       });
 
       if (!categories.length) {
@@ -43,7 +48,7 @@ export async function POST(req: NextRequest) {
 
       // Verificar duplicado
       const existing = await db.product.findFirst({
-        where: { accountId: ACCOUNT_ID, name: nombre.trim() },
+        where: { accountId, name: nombre.trim() },
       });
       if (existing) {
         return Response.json(
@@ -62,7 +67,7 @@ export async function POST(req: NextRequest) {
       // Crear producto
       const product = await db.product.create({
         data: {
-          accountId: ACCOUNT_ID,
+          accountId,
           categoryId: catMatch.id,
           name: nombre.trim(),
           unit: safeUnit,
@@ -79,7 +84,7 @@ export async function POST(req: NextRequest) {
 
       // Crear PriceListItems con markup calculado desde precio_venta
       const priceLists = await db.priceList.findMany({
-        where: { accountId: ACCOUNT_ID, isActive: true },
+        where: { accountId, isActive: true },
       });
 
       let markupDefault = 0;
@@ -127,12 +132,12 @@ export async function POST(req: NextRequest) {
       let sale;
       if (sale_id) {
         sale = await db.sale.findFirst({
-          where: { id: sale_id, accountId: ACCOUNT_ID },
+          where: { id: sale_id, accountId },
           include: { payments: true },
         });
       } else {
         sale = await db.sale.findFirst({
-          where: { accountId: ACCOUNT_ID, status: { in: ["pending", "partial"] } },
+          where: { accountId, status: { in: ["pending", "partial"] } },
           orderBy: { saleDate: "desc" },
           include: { payments: true },
         });
@@ -144,7 +149,7 @@ export async function POST(req: NextRequest) {
 
       // Buscar método de pago para el campo obligatorio paymentMethodId
       const paymentMethod = await db.paymentMethod.findFirst({
-        where: { accountId: ACCOUNT_ID, isActive: true },
+        where: { accountId, isActive: true },
       });
 
       if (!paymentMethod) {

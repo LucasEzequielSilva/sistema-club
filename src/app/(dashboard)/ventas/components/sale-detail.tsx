@@ -29,8 +29,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 interface SaleDetailProps {
   saleId: string;
@@ -110,6 +109,7 @@ type SaleData = {
 };
 
 export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProps) {
+  const { accountId } = useAccountId();
   const [sale, setSale] = useState<SaleData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -139,9 +139,9 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
 
   // Load payment methods when dialog opens
   useEffect(() => {
-    if (!showPaymentDialog) return;
+    if (!showPaymentDialog || !accountId) return;
     trpc.clasificaciones.listPaymentMethods
-      .query({ accountId: ACCOUNT_ID })
+      .query({ accountId })
       .then((methods: any[]) =>
         setPaymentMethods(
           methods

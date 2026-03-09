@@ -49,8 +49,7 @@ import {
 import { StatCard } from "@/components/shared/stat-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { SetupChecklist } from "@/components/shared/setup-checklist";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -95,6 +94,7 @@ const STATUS_LABELS: Record<string, string> = {
 type PeriodPreset = "today" | "this_month" | "last_month" | "quarter" | "year";
 
 export default function TableroPage() {
+  const { accountId } = useAccountId();
   const router = useRouter();
   const [preset, setPreset] = useState<PeriodPreset>("today");
   const [loading, setLoading] = useState(true);
@@ -143,11 +143,12 @@ export default function TableroPage() {
   }, []);
 
   const loadData = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const range = getDateRange(preset);
       const result = await trpc.tablero.getDashboard.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         dateFrom: range.from,
         dateTo: range.to,
       });
@@ -157,7 +158,7 @@ export default function TableroPage() {
     } finally {
       setLoading(false);
     }
-  }, [preset, getDateRange]);
+  }, [preset, getDateRange, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadData, 300);

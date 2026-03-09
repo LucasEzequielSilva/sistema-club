@@ -18,8 +18,7 @@ import {
   PartyPopper,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 const SETUP_DONE_KEY = "sc_setup_complete_v1";
 const PROGRESS_KEY = "sc_progress_v1";
 
@@ -67,6 +66,7 @@ type StepDef = {
 
 // ── Component ────────────────────────────────────────────────────────────────
 export function SetupChecklist({ hasSales }: { hasSales: boolean }) {
+  const { accountId } = useAccountId();
   const router = useRouter();
   const [loadingData, setLoadingData] = useState(true);
   const [celebrating, setCelebrating] = useState(false);
@@ -80,12 +80,13 @@ export function SetupChecklist({ hasSales }: { hasSales: boolean }) {
 
   useEffect(() => {
     async function load() {
+      if (!accountId) return;
       try {
         const [cats, sups, prods, methods] = await Promise.all([
-          trpc.clasificaciones.listProductCategories.query({ accountId: ACCOUNT_ID }),
-          trpc.proveedores.list.query({ accountId: ACCOUNT_ID, isActive: true }),
-          trpc.productos.list.query({ accountId: ACCOUNT_ID, isActive: true }),
-          trpc.clasificaciones.listPaymentMethods.query({ accountId: ACCOUNT_ID }),
+          trpc.clasificaciones.listProductCategories.query({ accountId }),
+          trpc.proveedores.list.query({ accountId, isActive: true }),
+          trpc.productos.list.query({ accountId, isActive: true }),
+          trpc.clasificaciones.listPaymentMethods.query({ accountId }),
         ]);
         setStatus({
           hasCategories: (cats as any[]).length > 0,
@@ -100,7 +101,7 @@ export function SetupChecklist({ hasSales }: { hasSales: boolean }) {
       }
     }
     load();
-  }, []);
+  }, [accountId]);
 
   const steps: StepDef[] = [
     {

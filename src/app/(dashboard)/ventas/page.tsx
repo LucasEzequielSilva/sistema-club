@@ -35,8 +35,7 @@ import { useConfirm } from "@/hooks/use-confirm";
 import { StatCard } from "@/components/shared/stat-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 type SaleListItem = {
   id: string;
@@ -141,6 +140,7 @@ function toInputDate(d: Date | null): string {
 }
 
 export default function VentasPage() {
+  const { accountId } = useAccountId();
   const router = useRouter();
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
@@ -164,10 +164,11 @@ export default function VentasPage() {
   });
 
   const loadSales = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const params: any = {
-        accountId: ACCOUNT_ID,
+        accountId,
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(dateFrom && { dateFrom: new Date(dateFrom) }),
         ...(dateTo && {
@@ -177,7 +178,7 @@ export default function VentasPage() {
       const [result, summaryResult] = await Promise.all([
         trpc.ventas.list.query(params),
         trpc.ventas.getSummary.query({
-          accountId: ACCOUNT_ID,
+          accountId,
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
           ...(dateTo && {
             dateTo: new Date(dateTo + "T23:59:59"),
@@ -191,7 +192,7 @@ export default function VentasPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, dateFrom, dateTo]);
+  }, [statusFilter, dateFrom, dateTo, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadSales, 300);
@@ -561,7 +562,7 @@ export default function VentasPage() {
           setEditingId(null);
         }}
         onSuccess={handleDialogSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
         editingId={editingId}
       />
       {ConfirmDialog}

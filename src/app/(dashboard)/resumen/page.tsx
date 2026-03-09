@@ -18,8 +18,7 @@ import { BarChart3, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -77,6 +76,7 @@ function getPreset(preset: string) {
 }
 
 export default function ResumenPage() {
+  const { accountId } = useAccountId();
   const defaultRange = getMonthRange();
   const [dateFrom, setDateFrom] = useState(defaultRange.from);
   const [dateTo, setDateTo] = useState(defaultRange.to);
@@ -89,11 +89,11 @@ export default function ResumenPage() {
   const [economicData, setEconomicData] = useState<any>(null);
 
   const loadData = useCallback(async () => {
-    if (!dateFrom || !dateTo) return;
+    if (!dateFrom || !dateTo || !accountId) return;
     setLoading(true);
     try {
       const params = {
-        accountId: ACCOUNT_ID,
+        accountId,
         dateFrom: new Date(dateFrom),
         dateTo: new Date(dateTo + "T23:59:59"),
       };
@@ -112,7 +112,7 @@ export default function ResumenPage() {
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo]);
+  }, [dateFrom, dateTo, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadData, 300);

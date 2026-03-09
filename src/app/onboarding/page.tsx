@@ -27,8 +27,7 @@ import {
   X,
   ShoppingBag,
 } from "lucide-react";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 // ── Rubros y sus categorías sugeridas ────────────────────────────────────────
 const RUBROS = [
@@ -257,6 +256,7 @@ function StepRubro({ onNext }: { onNext: (rubro: RubroId) => void }) {
 
 // ── Step 2: Categorías ────────────────────────────────────────────────────────
 function StepCategories({ rubro, onNext }: { rubro: RubroId; onNext: (id: string) => void }) {
+  const { accountId } = useAccountId();
   const suggestedCats = CATS_BY_RUBRO[rubro];
   const [selected, setSelected] = useState<string[]>([suggestedCats[0]]);
   const [custom, setCustom] = useState("");
@@ -283,7 +283,7 @@ function StepCategories({ rubro, onNext }: { rubro: RubroId; onNext: (id: string
       const results = await Promise.all(
         selected.map((name) =>
           trpc.clasificaciones.createProductCategory.mutate({
-            accountId: ACCOUNT_ID,
+            accountId: accountId ?? "",
             name,
           })
         )
@@ -382,6 +382,7 @@ function StepCategories({ rubro, onNext }: { rubro: RubroId; onNext: (id: string
 
 // ── Step 2: Proveedor ─────────────────────────────────────────────────────────
 function StepSupplier({ onNext }: { onNext: () => void }) {
+  const { accountId } = useAccountId();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
@@ -391,7 +392,7 @@ function StepSupplier({ onNext }: { onNext: () => void }) {
     setLoading(true);
     try {
       await trpc.proveedores.create.mutate({
-        accountId: ACCOUNT_ID,
+        accountId: accountId ?? "",
         name: name.trim(),
         phone: phone.trim() || "",
       });
@@ -469,6 +470,7 @@ function StepProduct({
   categoryId: string | null;
   onNext: () => void;
 }) {
+  const { accountId } = useAccountId();
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [loading, setLoading] = useState(false);
@@ -482,7 +484,7 @@ function StepProduct({
     setLoading(true);
     try {
       await trpc.productos.create.mutate({
-        accountId: ACCOUNT_ID,
+        accountId: accountId ?? "",
         name: name.trim(),
         categoryId,
         unit: "unidad",
@@ -570,6 +572,7 @@ const PAYMENT_OPTIONS = [
 ];
 
 function StepPayments({ onNext }: { onNext: () => void }) {
+  const { accountId } = useAccountId();
   const [selected, setSelected] = useState<string[]>(["Efectivo", "Transferencia"]);
   const [loading, setLoading] = useState(false);
 
@@ -584,7 +587,7 @@ function StepPayments({ onNext }: { onNext: () => void }) {
     setLoading(true);
     try {
       const existing = await trpc.clasificaciones.listPaymentMethods.query({
-        accountId: ACCOUNT_ID,
+        accountId: accountId ?? "",
       });
       const existingNames = (existing as any[]).map((m) =>
         (m.name as string).toLowerCase()
@@ -598,7 +601,7 @@ function StepPayments({ onNext }: { onNext: () => void }) {
         await Promise.all(
           toCreate.map((o) =>
             trpc.clasificaciones.createPaymentMethod.mutate({
-              accountId: ACCOUNT_ID,
+              accountId: accountId ?? "",
               name: o.name,
               accreditationDays: o.days,
             })

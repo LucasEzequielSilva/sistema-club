@@ -34,8 +34,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
 import { Package, MoreHorizontal, Loader2 } from "lucide-react";
 import { useConfirm } from "@/hooks/use-confirm";
-
-const ACCOUNT_ID = "test-account-id"; // TODO: reemplazar por sesión real
+import { useAccountId } from "@/hooks/use-account-id";
 
 const UNIT_LABELS: Record<string, string> = {
   unidad: "Unidad",
@@ -92,6 +91,7 @@ function getMarginClass(marginPct: number): string {
 }
 
 export default function ProductosPage() {
+  const { accountId } = useAccountId();
   const [products, setProducts] = useState<ProductListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -123,23 +123,25 @@ export default function ProductosPage() {
 
   // Load filters data
   useEffect(() => {
+    if (!accountId) return;
     trpc.clasificaciones.listProductCategories
-      .query({ accountId: ACCOUNT_ID })
+      .query({ accountId })
       .then((cats: any[]) => setCategories(cats.map((c) => ({ id: c.id, name: c.name }))))
       .catch(() => {});
     trpc.proveedores.list
-      .query({ accountId: ACCOUNT_ID, isActive: true })
+      .query({ accountId, isActive: true })
       .then((sups) =>
         setSuppliers(sups.map((s) => ({ id: s.id, name: s.name })))
       )
       .catch(() => {});
-  }, []);
+  }, [accountId]);
 
   const loadProducts = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const result = await trpc.productos.list.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         search: search.trim() || undefined,
         categoryId: categoryFilter !== "all" ? categoryFilter : undefined,
         supplierId: supplierFilter !== "all" ? supplierFilter : undefined,
@@ -151,7 +153,7 @@ export default function ProductosPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, categoryFilter, supplierFilter, lowStockOnly]);
+  }, [search, categoryFilter, supplierFilter, lowStockOnly, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadProducts, 300);
@@ -482,7 +484,7 @@ export default function ProductosPage() {
           setEditingId(null);
         }}
         onSuccess={handleDialogSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
         editingId={editingId}
       />
       {ConfirmDeactivateDialog}

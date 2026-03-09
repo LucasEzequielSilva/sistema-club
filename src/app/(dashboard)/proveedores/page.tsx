@@ -27,8 +27,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
 import { Building2, Search, MoreHorizontal, Plus } from "lucide-react";
 import { useConfirm } from "@/hooks/use-confirm";
-
-const ACCOUNT_ID = "test-account-id"; // TODO: reemplazar por sesión real
+import { useAccountId } from "@/hooks/use-account-id";
 
 type Supplier = {
   id: string;
@@ -44,6 +43,7 @@ type Supplier = {
 };
 
 export default function ProveedoresPage() {
+  const { accountId } = useAccountId();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -64,10 +64,11 @@ export default function ProveedoresPage() {
   });
 
   const loadSuppliers = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       const result = await trpc.proveedores.list.query({
-        accountId: ACCOUNT_ID,
+        accountId,
         search: search.trim() || undefined,
       });
       setSuppliers(result as Supplier[]);
@@ -76,7 +77,7 @@ export default function ProveedoresPage() {
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadSuppliers, 300);
@@ -274,7 +275,7 @@ export default function ProveedoresPage() {
         onOpenChange={setShowDialog}
         onClose={() => { setShowDialog(false); setEditingId(null); }}
         onSuccess={handleDialogSuccess}
-        accountId={ACCOUNT_ID}
+        accountId={accountId ?? ""}
         editingId={editingId}
       />
       {ConfirmDeactivateDialog}

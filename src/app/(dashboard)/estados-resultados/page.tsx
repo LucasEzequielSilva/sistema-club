@@ -22,8 +22,7 @@ import { toast } from "sonner";
 import { FileText, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
-
-const ACCOUNT_ID = "test-account-id";
+import { useAccountId } from "@/hooks/use-account-id";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -45,6 +44,7 @@ const MONTHS = [
 type TabId = "financiero" | "anual";
 
 export default function EstadosResultadosPage() {
+  const { accountId } = useAccountId();
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
@@ -56,18 +56,19 @@ export default function EstadosResultadosPage() {
   const [annualData, setAnnualData] = useState<any>(null);
 
   const loadData = useCallback(async () => {
+    if (!accountId) return;
     setLoading(true);
     try {
       if (tab === "financiero") {
         const result = await trpc.estadosResultados.financialStatement.query({
-          accountId: ACCOUNT_ID,
+          accountId,
           year,
           month,
         });
         setFinancialData(result);
       } else {
         const result = await trpc.estadosResultados.annualGrid.query({
-          accountId: ACCOUNT_ID,
+          accountId,
           year,
         });
         setAnnualData(result);
@@ -77,7 +78,7 @@ export default function EstadosResultadosPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, year, month]);
+  }, [tab, year, month, accountId]);
 
   useEffect(() => {
     const timer = setTimeout(loadData, 300);
