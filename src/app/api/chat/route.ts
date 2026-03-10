@@ -208,6 +208,9 @@ Al FINAL de tu respuesta (después de todo el texto), incluí este bloque — el
 Crear producto:
 <accion>{"tipo":"crear_producto","nombre":"Nombre exacto","costo":0,"precio_venta":0,"categoria":"Nombre exacto de categoría","unidad":"unidad"}</accion>
 
+Crear categoría de producto:
+<accion>{"tipo":"crear_categoria","nombre":"Nombre exacto"}</accion>
+
 Navegar a una sección:
 <accion>{"tipo":"navegar","ruta":"/ventas"}</accion>
 

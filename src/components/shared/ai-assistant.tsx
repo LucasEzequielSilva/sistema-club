@@ -66,7 +66,8 @@ const ROUTE_LABELS: Record<string, string> = {
 };
 
 function getActionLabel(data: Record<string, unknown>): string {
-  if (data.tipo === "crear_producto") return `Creando "${data.nombre}"`;
+  if (data.tipo === "crear_producto") return `Creando producto "${data.nombre}"`;
+  if (data.tipo === "crear_categoria") return `Creando categoría "${data.nombre}"`;
   if (data.tipo === "navegar") {
     const nombre = ROUTE_LABELS[data.ruta as string] ?? data.ruta as string;
     return `Navegando a ${nombre}`;
@@ -83,6 +84,9 @@ function getSuccessDetail(data: Record<string, unknown>, result: Record<string, 
     const pv = result.precio_venta ? ` · PV $${result.precio_venta}` : "";
     const margen = result.margen_pct != null ? ` · Margen ${result.margen_pct}%` : "";
     return `"${result.nombre}"${cat}${pv}${margen}`;
+  }
+  if (data.tipo === "crear_categoria") {
+    return `Categoría "${result.nombre}" creada`;
   }
   if (data.tipo === "registrar_cobro") {
     const concepto = result.concepto ? `"${result.concepto}" · ` : "";
@@ -398,7 +402,7 @@ export function AIAssistant() {
           });
 
           // Refrescar página si es creación (para que aparezca en listas)
-          if (res.ok && actionData.tipo === "crear_producto") {
+          if (res.ok && (actionData.tipo === "crear_producto" || actionData.tipo === "crear_categoria")) {
             router.refresh();
           }
           }

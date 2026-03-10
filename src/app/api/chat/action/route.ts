@@ -189,6 +189,41 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── CREAR CATEGORÍA DE PRODUCTO ──────────────────────────
+    if (tipo === "crear_categoria") {
+      const { nombre, descripcion } = body;
+
+      if (!nombre?.trim()) {
+        return Response.json({ error: "El nombre es obligatorio" }, { status: 400 });
+      }
+
+      // Verificar duplicado
+      const existing = await db.productCategory.findFirst({
+        where: { accountId, name: nombre.trim() },
+      });
+      if (existing) {
+        return Response.json(
+          { error: `Ya existe una categoría llamada "${nombre}"` },
+          { status: 409 }
+        );
+      }
+
+      const category = await db.productCategory.create({
+        data: {
+          accountId,
+          name: nombre.trim(),
+          description: descripcion?.trim() || null,
+          sortOrder: 0,
+        },
+      });
+
+      return Response.json({
+        ok: true,
+        id: category.id,
+        nombre: category.name,
+      });
+    }
+
     // ── TIPO DESCONOCIDO ──────────────────────────────────────
     return Response.json({ error: `Acción "${tipo}" no reconocida` }, { status: 400 });
   } catch (err: unknown) {

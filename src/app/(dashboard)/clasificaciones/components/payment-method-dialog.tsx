@@ -47,14 +47,32 @@ export function PaymentMethodDialog({
   const [accreditationDays, setAccreditationDays] = useState("0");
   const [isActive, setIsActive] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (!open) return;
+
+    if (editingId) {
+      // Cargar datos del método existente
+      setFetching(true);
+      trpc.clasificaciones.listPaymentMethods
+        .query({ accountId })
+        .then((methods) => {
+          const method = methods.find((m: any) => m.id === editingId);
+          if (method) {
+            setName(method.name);
+            setAccreditationDays(String(method.accreditationDays));
+            setIsActive(method.isActive);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setFetching(false));
+    } else {
       setName("");
       setAccreditationDays("0");
       setIsActive(true);
     }
-  }, [open]);
+  }, [open, editingId, accountId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,8 +82,8 @@ export function PaymentMethodDialog({
       if (editingId) {
         await trpc.clasificaciones.updatePaymentMethod.mutate({
           id: editingId,
-          name: name || undefined,
-          accreditationDays: parseInt(accreditationDays) || undefined,
+          name: name.trim() || undefined,
+          accreditationDays: parseInt(accreditationDays),
           isActive,
         });
         toast.success("Método de pago actualizado");
@@ -99,6 +117,9 @@ export function PaymentMethodDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {fetching ? (
+          <div className="text-center py-6 text-muted-foreground text-sm">Cargando...</div>
+        ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="name">Nombre *</Label>
@@ -157,6 +178,7 @@ export function PaymentMethodDialog({
             </Button>
           </div>
         </form>
+        )}
       </DialogContent>
     </Dialog>
   );
