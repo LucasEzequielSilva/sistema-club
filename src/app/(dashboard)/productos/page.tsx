@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProductDialog } from "./components/product-dialog";
 import { ProductDetail } from "./components/product-detail";
+import { ProductCsvImport } from "./components/product-csv-import";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { toast } from "sonner";
@@ -231,14 +232,23 @@ export default function ProductosPage() {
         description="Catálogo de productos, costos y precios"
         icon={Package}
         actions={
-          <Button
-            onClick={() => {
-              setEditingId(null);
-              setShowDialog(true);
-            }}
-          >
-            + Nuevo Producto
-          </Button>
+          <div className="flex items-center gap-2">
+            {accountId && categories.length > 0 && (
+              <ProductCsvImport
+                accountId={accountId}
+                defaultCategoryId={categories[0].id}
+                onSuccess={loadProducts}
+              />
+            )}
+            <Button
+              onClick={() => {
+                setEditingId(null);
+                setShowDialog(true);
+              }}
+            >
+              + Nuevo Producto
+            </Button>
+          </div>
         }
       />
 

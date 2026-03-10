@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { Plus, Trash2 } from "lucide-react";
 
 interface PurchaseDialogProps {
   open: boolean;
@@ -30,10 +31,25 @@ interface PurchaseDialogProps {
   editingId: string | null;
 }
 
-type Product = { id: string; name: string };
+type Product = { id: string; name: string; unitCost: number };
 type Supplier = { id: string; name: string };
 type CostCategory = { id: string; name: string; costType: string };
 type PaymentMethod = { id: string; name: string; accreditationDays: number };
+
+type IvaMode = "0" | "10.5" | "21" | "custom";
+
+// Un ítem dentro de la compra
+type PurchaseItem = {
+  productId: string;
+  description: string;
+  costCategoryId: string;
+  unitCost: string;
+  quantity: string;
+  discountPct: string;
+  ivaMode: IvaMode;
+  ivaCustom: string;
+  updateProductCost: boolean;
+};
 
 type InlinePayment = {
   paymentMethodId: string;
@@ -41,41 +57,56 @@ type InlinePayment = {
   paymentDate: string;
 };
 
-type IvaMode = "0" | "10.5" | "21" | "custom";
-
-type FormState = {
+// Cabecera de la compra (compartida por todos los ítems)
+type Header = {
   supplierId: string;
-  productId: string;
-  costCategoryId: string;
   invoiceDate: string;
-  description: string;
-  unitCost: string;
-  quantity: string;
-  discountPct: string;
-  ivaAmount: string;
-  ivaMode: IvaMode;
   invoiceNumber: string;
   dueDate: string;
   notes: string;
-  updateProductCost: boolean;
 };
 
-const EMPTY: FormState = {
-  supplierId: "",
+const EMPTY_ITEM: PurchaseItem = {
   productId: "",
-  costCategoryId: "",
-  invoiceDate: new Date().toISOString().split("T")[0],
   description: "",
+  costCategoryId: "",
   unitCost: "0",
   quantity: "1",
   discountPct: "0",
-  ivaAmount: "0",
   ivaMode: "21",
+  ivaCustom: "0",
+  updateProductCost: true,
+};
+
+const EMPTY_HEADER: Header = {
+  supplierId: "",
+  invoiceDate: new Date().toISOString().split("T")[0],
   invoiceNumber: "",
   dueDate: "",
   notes: "",
-  updateProductCost: true,
 };
+
+function calcItemIva(item: PurchaseItem): number {
+  const cost = parseFloat(item.unitCost) || 0;
+  const qty = parseFloat(item.quantity) || 0;
+  const disc = parseFloat(item.discountPct) || 0;
+  const sub = cost * qty * (1 - disc / 100);
+  if (item.ivaMode === "0") return 0;
+  if (item.ivaMode === "10.5") return Math.round(sub * 0.105 * 100) / 100;
+  if (item.ivaMode === "21") return Math.round(sub * 0.21 * 100) / 100;
+  return parseFloat(item.ivaCustom) || 0;
+}
+
+function calcItemSubtotal(item: PurchaseItem): number {
+  const cost = parseFloat(item.unitCost) || 0;
+  const qty = parseFloat(item.quantity) || 0;
+  const disc = parseFloat(item.discountPct) || 0;
+  return cost * qty * (1 - disc / 100);
+}
+
+function calcItemTotal(item: PurchaseItem): number {
+  return calcItemSubtotal(item) + calcItemIva(item);
+}
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -85,6 +116,223 @@ function formatCurrency(n: number) {
   }).format(n);
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Sub-componente: fila de ítem
+// ────────────────────────────────────────────────────────────────────────────
+function ItemRow({
+  item,
+  index,
+  products,
+  costCategories,
+  onChange,
+  onRemove,
+  canRemove,
+}: {
+  item: PurchaseItem;
+  index: number;
+  products: Product[];
+  costCategories: CostCategory[];
+  onChange: (idx: number, updated: PurchaseItem) => void;
+  onRemove: (idx: number) => void;
+  canRemove: boolean;
+}) {
+  const set = (field: keyof PurchaseItem, value: string | boolean) =>
+    onChange(index, { ...item, [field]: value });
+
+  const isProductPurchase = !!item.productId;
+
+  // Cuando se selecciona un producto, pre-llenar el costo
+  const handleProductChange = (productId: string) => {
+    const p = products.find((x) => x.id === productId);
+    onChange(index, {
+      ...item,
+      productId,
+      unitCost: p ? String(p.unitCost) : item.unitCost,
+    });
+  };
+
+  return (
+    <div className="border border-border rounded-xl p-4 space-y-3 bg-card">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          Ítem {index + 1}
+        </span>
+        {canRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Producto + Descripción */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label className="text-xs">Producto</Label>
+          <Select
+            value={item.productId || "none"}
+            onValueChange={(v) => handleProductChange(v === "none" ? "" : v)}
+          >
+            <SelectTrigger className="h-9">
+              <SelectValue placeholder="Sin producto (gasto)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin producto (gasto)</SelectItem>
+              {products.map((p) => (
+                <SelectItem key={p.id} value={p.id}>
+                  {p.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs">
+            Descripción{!isProductPurchase && <span className="text-red-500 ml-0.5">*</span>}
+          </Label>
+          <Input
+            value={item.description}
+            onChange={(e) => set("description", e.target.value)}
+            placeholder={isProductPurchase ? "Opcional..." : "Ej: Alquiler, Internet..."}
+            className="h-9"
+          />
+        </div>
+      </div>
+
+      {/* Clasificación */}
+      <div>
+        <Label className="text-xs">
+          Clasificación de costo <span className="text-red-500">*</span>
+        </Label>
+        <Select
+          value={item.costCategoryId || "none"}
+          onValueChange={(v) => set("costCategoryId", v === "none" ? "" : v)}
+        >
+          <SelectTrigger className="h-9">
+            <SelectValue placeholder="Seleccionar..." />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Seleccionar...</SelectItem>
+            {costCategories.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}{" "}
+                <span className="text-muted-foreground text-xs">
+                  ({c.costType === "variable" ? "Var." : c.costType === "fijo" ? "Fijo" : "Imp."})
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Cantidad + Costo + Descuento */}
+      <div className="grid grid-cols-3 gap-2">
+        <div>
+          <Label className="text-xs">Cantidad</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0.01"
+            value={item.quantity}
+            onChange={(e) => set("quantity", e.target.value)}
+            className="h-9"
+          />
+        </div>
+        <div>
+          <Label className="text-xs">Costo unit. (sin IVA)</Label>
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={item.unitCost}
+              onChange={(e) => set("unitCost", e.target.value)}
+              className="h-9 pl-6"
+            />
+          </div>
+        </div>
+        <div>
+          <Label className="text-xs">Descuento %</Label>
+          <Input
+            type="number"
+            step="0.1"
+            min="0"
+            max="100"
+            value={item.discountPct}
+            onChange={(e) => set("discountPct", e.target.value)}
+            className="h-9"
+          />
+        </div>
+      </div>
+
+      {/* IVA */}
+      <div className="space-y-1.5">
+        <Label className="text-xs">IVA</Label>
+        <div className="flex gap-1.5 flex-wrap">
+          {(["0", "10.5", "21", "custom"] as IvaMode[]).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => set("ivaMode", mode)}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
+                item.ivaMode === mode
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card border-border text-muted-foreground hover:border-primary/40"
+              }`}
+            >
+              {mode === "0" ? "Sin IVA" : mode === "custom" ? "Otro" : `${mode}%`}
+            </button>
+          ))}
+        </div>
+        {item.ivaMode === "custom" && (
+          <div className="relative max-w-[160px]">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs">$</span>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={item.ivaCustom}
+              onChange={(e) => set("ivaCustom", e.target.value)}
+              className="h-9 pl-6"
+              placeholder="Monto IVA..."
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Actualizar costo del producto */}
+      {isProductPurchase && (
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id={`updateCost-${index}`}
+            checked={item.updateProductCost}
+            onChange={(e) => set("updateProductCost", e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <label htmlFor={`updateCost-${index}`} className="text-xs text-muted-foreground">
+            Actualizar costo del producto con esta compra
+          </label>
+        </div>
+      )}
+
+      {/* Mini resumen del ítem */}
+      <div className="flex justify-between text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
+        <span>Subtotal: <span className="font-mono">{formatCurrency(calcItemSubtotal(item))}</span></span>
+        <span>IVA: <span className="font-mono">{formatCurrency(calcItemIva(item))}</span></span>
+        <span className="font-semibold text-foreground">Total: <span className="font-mono">{formatCurrency(calcItemTotal(item))}</span></span>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Componente principal
+// ────────────────────────────────────────────────────────────────────────────
 export function PurchaseDialog({
   open,
   onOpenChange,
@@ -93,7 +341,8 @@ export function PurchaseDialog({
   accountId,
   editingId,
 }: PurchaseDialogProps) {
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const [header, setHeader] = useState<Header>(EMPTY_HEADER);
+  const [items, setItems] = useState<PurchaseItem[]>([{ ...EMPTY_ITEM }]);
   const [payments, setPayments] = useState<InlinePayment[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -111,7 +360,7 @@ export function PurchaseDialog({
     trpc.productos.list
       .query({ accountId, isActive: true })
       .then((prods: any[]) =>
-        setProducts(prods.map((p) => ({ id: p.id, name: p.name })))
+        setProducts(prods.map((p) => ({ id: p.id, name: p.name, unitCost: p.unitCost ?? 0 })))
       )
       .catch(() => {});
 
@@ -126,13 +375,11 @@ export function PurchaseDialog({
       .query({ accountId })
       .then((cats: any[]) =>
         setCostCategories(
-          cats
-            .filter((c: any) => c.isActive)
-            .map((c: any) => ({
-              id: c.id,
-              name: c.name,
-              costType: c.costType,
-            }))
+          cats.filter((c: any) => c.isActive).map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            costType: c.costType,
+          }))
         )
       )
       .catch(() => {});
@@ -141,19 +388,17 @@ export function PurchaseDialog({
       .query({ accountId })
       .then((methods: any[]) =>
         setPaymentMethods(
-          methods
-            .filter((m: any) => m.isActive)
-            .map((m: any) => ({
-              id: m.id,
-              name: m.name,
-              accreditationDays: m.accreditationDays,
-            }))
+          methods.filter((m: any) => m.isActive).map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            accreditationDays: m.accreditationDays,
+          }))
         )
       )
       .catch(() => {});
   }, [open, accountId]);
 
-  // Load editing data
+  // Load editing data (modo ítem único)
   useEffect(() => {
     if (!open) return;
 
@@ -162,125 +407,106 @@ export function PurchaseDialog({
       trpc.compras.getById
         .query({ id: editingId })
         .then((p: any) => {
-          setForm({
+          setHeader({
             supplierId: p.supplierId ?? "",
-            productId: p.productId ?? "",
-            costCategoryId: p.costCategoryId,
             invoiceDate: new Date(p.invoiceDate).toISOString().split("T")[0],
+            invoiceNumber: p.invoiceNumber ?? "",
+            dueDate: p.dueDate ? new Date(p.dueDate).toISOString().split("T")[0] : "",
+            notes: p.notes ?? "",
+          });
+          setItems([{
+            productId: p.productId ?? "",
             description: p.description ?? "",
+            costCategoryId: p.costCategoryId,
             unitCost: String(p.unitCost),
             quantity: String(p.quantity),
             discountPct: String(p.discountPct),
-            ivaAmount: String(p.ivaAmount),
             ivaMode: "custom",
-            invoiceNumber: p.invoiceNumber ?? "",
-            dueDate: p.dueDate
-              ? new Date(p.dueDate).toISOString().split("T")[0]
-              : "",
-            notes: p.notes ?? "",
+            ivaCustom: String(p.ivaAmount),
             updateProductCost: false,
-          });
+          }]);
+          setPayments([]);
         })
         .catch(() => toast.error("No se pudo cargar la compra"))
         .finally(() => setFetching(false));
     } else {
-      setForm(EMPTY);
+      setHeader(EMPTY_HEADER);
+      setItems([{ ...EMPTY_ITEM }]);
       setPayments([]);
     }
   }, [open, editingId]);
 
-  const set =
-    (field: keyof FormState) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-      setForm((prev) => ({ ...prev, [field]: e.target.value }));
+  // Totales globales
+  const grandTotal = items.reduce((sum, it) => sum + calcItemTotal(it), 0);
+  const totalPayments = payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-  // Live calculations
-  const unitCost = parseFloat(form.unitCost) || 0;
-  const quantity = parseFloat(form.quantity) || 0;
-  const discountPct = parseFloat(form.discountPct) || 0;
-  const subtotal = unitCost * quantity * (1 - discountPct / 100);
+  // Helpers ítems
+  const updateItem = (idx: number, updated: PurchaseItem) =>
+    setItems((prev) => prev.map((it, i) => (i === idx ? updated : it)));
 
-  // IVA calculado según el modo
-  const computedIva: number = (() => {
-    if (form.ivaMode === "0") return 0;
-    if (form.ivaMode === "10.5") return Math.round(subtotal * 0.105 * 100) / 100;
-    if (form.ivaMode === "21") return Math.round(subtotal * 0.21 * 100) / 100;
-    return parseFloat(form.ivaAmount) || 0; // custom
-  })();
-  const ivaAmount = computedIva;
-  const total = subtotal + ivaAmount;
-  const totalPayments = payments.reduce(
-    (sum, p) => sum + (parseFloat(p.amount) || 0),
-    0
-  );
+  const addItem = () => setItems((prev) => [...prev, { ...EMPTY_ITEM }]);
 
-  // Determine if this is a product purchase or a generic expense
-  const isProductPurchase = !!form.productId;
+  const removeItem = (idx: number) =>
+    setItems((prev) => prev.filter((_, i) => i !== idx));
 
-  // Payment helpers
+  // Helpers pagos
   const addPaymentRow = () => {
-    if (payments.length >= 2) {
-      toast.error("Máximo 2 medios de pago por compra");
-      return;
-    }
+    if (payments.length >= 3) { toast.error("Máximo 3 medios de pago"); return; }
     setPayments((prev) => [
       ...prev,
       {
         paymentMethodId: "",
-        amount: String(Math.max(total - totalPayments, 0).toFixed(2)),
-        paymentDate: form.invoiceDate,
+        amount: String(Math.max(grandTotal - totalPayments, 0).toFixed(2)),
+        paymentDate: header.invoiceDate,
       },
     ]);
   };
 
-  const removePaymentRow = (index: number) => {
-    setPayments((prev) => prev.filter((_, i) => i !== index));
-  };
+  const removePaymentRow = (idx: number) =>
+    setPayments((prev) => prev.filter((_, i) => i !== idx));
 
-  const updatePayment = (
-    index: number,
-    field: keyof InlinePayment,
-    value: string
-  ) => {
-    setPayments((prev) =>
-      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
-    );
-  };
+  const updatePayment = (idx: number, field: keyof InlinePayment, value: string) =>
+    setPayments((prev) => prev.map((p, i) => (i === idx ? { ...p, [field]: value } : p)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.costCategoryId) {
-      toast.error("Seleccioná una clasificación de costo");
-      return;
-    }
-
-    // Must have either product or description
-    if (!form.productId && !form.description.trim()) {
-      toast.error("Ingresá un producto o una descripción del gasto");
-      return;
+    // Validaciones
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      if (!it.costCategoryId) {
+        toast.error(`Ítem ${i + 1}: seleccioná una clasificación de costo`);
+        return;
+      }
+      if (!it.productId && !it.description.trim()) {
+        toast.error(`Ítem ${i + 1}: ingresá un producto o descripción`);
+        return;
+      }
     }
 
     setLoading(true);
     try {
       if (editingId) {
+        // Edición — solo un ítem
+        const it = items[0];
+        const ivaAmount = calcItemIva(it);
         await trpc.compras.update.mutate({
           id: editingId,
-          supplierId: form.supplierId || null,
-          costCategoryId: form.costCategoryId,
-          invoiceDate: new Date(form.invoiceDate),
-          description: form.description || null,
-          unitCost,
-          quantity,
-          discountPct,
+          supplierId: header.supplierId || null,
+          costCategoryId: it.costCategoryId,
+          invoiceDate: new Date(header.invoiceDate),
+          description: it.description || null,
+          unitCost: parseFloat(it.unitCost) || 0,
+          quantity: parseFloat(it.quantity) || 0,
+          discountPct: parseFloat(it.discountPct) || 0,
           ivaAmount,
-          invoiceNumber: form.invoiceNumber || null,
-          dueDate: form.dueDate ? new Date(form.dueDate) : null,
-          notes: form.notes || null,
+          invoiceNumber: header.invoiceNumber || null,
+          dueDate: header.dueDate ? new Date(header.dueDate) : null,
+          notes: header.notes || null,
         });
         toast.success("Compra actualizada");
       } else {
-        // Validate inline payments
+        // Creación — N ítems, pagos en el primero
         const validPayments = payments
           .filter((p) => p.paymentMethodId && parseFloat(p.amount) > 0)
           .map((p) => ({
@@ -289,40 +515,49 @@ export function PurchaseDialog({
             paymentDate: new Date(p.paymentDate),
           }));
 
-        await trpc.compras.create.mutate({
-          accountId,
-          supplierId: form.supplierId || null,
-          productId: form.productId || null,
-          costCategoryId: form.costCategoryId,
-          invoiceDate: new Date(form.invoiceDate),
-          description: form.description || undefined,
-          unitCost,
-          quantity,
-          discountPct,
-          ivaAmount,
-          invoiceNumber: form.invoiceNumber || undefined,
-          dueDate: form.dueDate ? new Date(form.dueDate) : null,
-          notes: form.notes || undefined,
-          payments: validPayments,
-        });
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          const ivaAmount = calcItemIva(it);
+          const unitCost = parseFloat(it.unitCost) || 0;
 
-        // Si corresponde, actualizar el costo del producto
-        if (isProductPurchase && form.updateProductCost && form.productId) {
-          try {
-            await trpc.productos.update.mutate({
-              id: form.productId,
-              acquisitionCost: unitCost,
-              rawMaterialCost: 0,
-              laborCost: 0,
-              packagingCost: 0,
-            });
-          } catch {
-            // No crítico — la compra ya se guardó
+          await trpc.compras.create.mutate({
+            accountId,
+            supplierId: header.supplierId || null,
+            productId: it.productId || null,
+            costCategoryId: it.costCategoryId,
+            invoiceDate: new Date(header.invoiceDate),
+            description: it.description || undefined,
+            unitCost,
+            quantity: parseFloat(it.quantity) || 0,
+            discountPct: parseFloat(it.discountPct) || 0,
+            ivaAmount,
+            invoiceNumber: header.invoiceNumber || undefined,
+            dueDate: header.dueDate ? new Date(header.dueDate) : null,
+            notes: header.notes || undefined,
+            // Los pagos van solo en el primer ítem
+            payments: i === 0 ? validPayments : [],
+          });
+
+          // Actualizar costo del producto si corresponde
+          if (it.productId && it.updateProductCost) {
+            try {
+              await trpc.productos.update.mutate({
+                id: it.productId,
+                acquisitionCost: unitCost,
+                rawMaterialCost: 0,
+                laborCost: 0,
+                packagingCost: 0,
+              });
+            } catch {
+              // No crítico
+            }
           }
         }
 
-        toast.success("Compra registrada");
+        const count = items.length;
+        toast.success(count === 1 ? "Compra registrada" : `${count} ítems registrados`);
       }
+
       onSuccess();
     } catch (err: any) {
       toast.error(err.message || "Error al guardar");
@@ -335,32 +570,26 @@ export function PurchaseDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {editingId ? "Editar" : "Nueva"} Compra
-          </DialogTitle>
+          <DialogTitle>{editingId ? "Editar" : "Nueva"} Compra</DialogTitle>
           <DialogDescription>
             {editingId
               ? "Modificá los datos de la compra"
-              : "Registrá una nueva compra o gasto"}
+              : "Registrá una compra con uno o más artículos"}
           </DialogDescription>
         </DialogHeader>
 
         {fetching ? (
-          <div className="py-8 text-center text-gray-400">Cargando...</div>
+          <div className="py-8 text-center text-muted-foreground text-sm">Cargando...</div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Supplier + Cost Category */}
+
+            {/* ── CABECERA ── */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Proveedor</Label>
                 <Select
-                  value={form.supplierId || "none"}
-                  onValueChange={(v) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      supplierId: v === "none" ? "" : v,
-                    }))
-                  }
+                  value={header.supplierId || "none"}
+                  onValueChange={(v) => setHeader((h) => ({ ...h, supplierId: v === "none" ? "" : v }))}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Sin proveedor" />
@@ -368,105 +597,18 @@ export function PurchaseDialog({
                   <SelectContent>
                     <SelectItem value="none">Sin proveedor</SelectItem>
                     {suppliers.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.name}
-                      </SelectItem>
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>
-                  Clasificación de Costo <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={form.costCategoryId || "none"}
-                  onValueChange={(v) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      costCategoryId: v === "none" ? "" : v,
-                    }))
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Seleccionar..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Seleccionar...</SelectItem>
-                    {costCategories.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}{" "}
-                        <span className="text-gray-400">
-                          ({c.costType === "variable"
-                            ? "Var."
-                            : c.costType === "fijo"
-                              ? "Fijo"
-                              : "Imp."})
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Product (optional) + Description */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Producto (si aplica)</Label>
-                <Select
-                  value={form.productId || "none"}
-                  onValueChange={(v) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      productId: v === "none" ? "" : v,
-                    }))
-                  }
-                  disabled={!!editingId}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Sin producto (gasto)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin producto (gasto)</SelectItem>
-                    {products.map((p) => (
-                      <SelectItem key={p.id} value={p.id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>
-                  Descripción{" "}
-                  {!isProductPurchase && (
-                    <span className="text-red-500">*</span>
-                  )}
-                </Label>
-                <Input
-                  value={form.description}
-                  onChange={set("description")}
-                  placeholder={
-                    isProductPurchase
-                      ? "Opcional..."
-                      : "Ej: Alquiler local, Servicio de internet..."
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Date + Invoice + Due Date */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label htmlFor="invoiceDate">
-                  Fecha Factura <span className="text-red-500">*</span>
-                </Label>
+                <Label htmlFor="invoiceDate">Fecha Factura <span className="text-red-500">*</span></Label>
                 <Input
                   id="invoiceDate"
                   type="date"
-                  value={form.invoiceDate}
-                  onChange={set("invoiceDate")}
+                  value={header.invoiceDate}
+                  onChange={(e) => setHeader((h) => ({ ...h, invoiceDate: e.target.value }))}
                   required
                 />
               </div>
@@ -474,8 +616,8 @@ export function PurchaseDialog({
                 <Label htmlFor="invoiceNumber">Nro. Factura</Label>
                 <Input
                   id="invoiceNumber"
-                  value={form.invoiceNumber}
-                  onChange={set("invoiceNumber")}
+                  value={header.invoiceNumber}
+                  onChange={(e) => setHeader((h) => ({ ...h, invoiceNumber: e.target.value }))}
                   placeholder="A-0001-00001234"
                 />
               </div>
@@ -484,161 +626,63 @@ export function PurchaseDialog({
                 <Input
                   id="dueDate"
                   type="date"
-                  value={form.dueDate}
-                  onChange={set("dueDate")}
+                  value={header.dueDate}
+                  onChange={(e) => setHeader((h) => ({ ...h, dueDate: e.target.value }))}
                 />
               </div>
             </div>
 
-            {/* Quantity + Cost + Discount */}
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label htmlFor="quantity">
-                  Cantidad <span className="text-red-500">*</span>
+            {/* ── ÍTEMS ── */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">
+                  Artículos{" "}
+                  <span className="text-muted-foreground font-normal text-sm">({items.length})</span>
                 </Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={form.quantity}
-                  onChange={set("quantity")}
-                  required
+                {!editingId && (
+                  <Button type="button" variant="outline" size="sm" onClick={addItem} className="gap-1.5">
+                    <Plus className="w-3.5 h-3.5" />
+                    Agregar artículo
+                  </Button>
+                )}
+              </div>
+
+              {items.map((item, idx) => (
+                <ItemRow
+                  key={idx}
+                  item={item}
+                  index={idx}
+                  products={products}
+                  costCategories={costCategories}
+                  onChange={updateItem}
+                  onRemove={removeItem}
+                  canRemove={items.length > 1}
                 />
-              </div>
-              <div>
-                <Label htmlFor="unitCost">
-                  Costo Unitario (sin IVA) <span className="text-red-500">*</span>
-                </Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                  <Input
-                    id="unitCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.unitCost}
-                    onChange={set("unitCost")}
-                    required
-                    className="pl-7"
-                  />
-                </div>
-              </div>
-              <div>
-                <Label htmlFor="discountPct">Descuento %</Label>
-                <Input
-                  id="discountPct"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  value={form.discountPct}
-                  onChange={set("discountPct")}
-                />
-              </div>
+              ))}
             </div>
 
-            {/* IVA */}
-            <div className="space-y-2">
-              <Label>IVA</Label>
-              <div className="flex gap-2 flex-wrap">
-                {(["0", "10.5", "21", "custom"] as IvaMode[]).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setForm((prev) => ({ ...prev, ivaMode: mode }))}
-                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
-                      form.ivaMode === mode
-                        ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-card border-border text-muted-foreground hover:border-primary/40"
-                    }`}
-                  >
-                    {mode === "0" ? "Sin IVA" : mode === "custom" ? "Otro monto" : `${mode}%`}
-                  </button>
-                ))}
-              </div>
-              {form.ivaMode === "custom" ? (
-                <div className="relative max-w-[180px]">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.ivaAmount}
-                    onChange={set("ivaAmount")}
-                    placeholder="Monto IVA..."
-                    className="pl-7"
-                  />
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  IVA calculado: <span className="font-mono font-medium">${ivaAmount.toFixed(2)}</span>
-                  {form.ivaMode !== "0" && (
-                    <span className="ml-1 text-muted-foreground/60">({form.ivaMode}% sobre subtotal)</span>
-                  )}
-                </p>
-              )}
-            </div>
-
-            {/* Actualizar costo del producto (solo si hay producto seleccionado) */}
-            {isProductPurchase && !editingId && (
-              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-                <input
-                  type="checkbox"
-                  id="updateProductCost"
-                  checked={form.updateProductCost}
-                  onChange={(e) => setForm((prev) => ({ ...prev, updateProductCost: e.target.checked }))}
-                  className="h-4 w-4 rounded border-border"
-                />
-                <label htmlFor="updateProductCost" className="text-sm text-foreground">
-                  Actualizar el costo del producto con el precio de esta compra
-                </label>
+            {/* ── TOTAL GLOBAL (si hay más de 1 ítem) ── */}
+            {items.length > 1 && (
+              <div className="flex justify-between items-center bg-muted/40 rounded-xl px-4 py-3 text-sm font-semibold">
+                <span className="text-muted-foreground">Total de la compra ({items.length} ítems)</span>
+                <span className="font-mono text-lg">{formatCurrency(grandTotal)}</span>
               </div>
             )}
 
-            {/* Live Preview */}
-            <div className="bg-slate-50 rounded-lg p-4 space-y-1 text-sm">
-              <div className="font-semibold text-base mb-2">Preview</div>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                <span className="text-gray-500">Subtotal:</span>
-                <span className="font-mono text-right">
-                  {formatCurrency(subtotal)}
-                </span>
-                <span className="text-gray-500">IVA:</span>
-                <span className="font-mono text-right">
-                  {formatCurrency(ivaAmount)}
-                </span>
-                <span className="text-gray-500 font-medium">Total:</span>
-                <span className="font-mono text-right font-bold">
-                  {formatCurrency(total)}
-                </span>
-                {isProductPurchase && (
-                  <>
-                    <span className="text-gray-500 border-t pt-1">
-                      Ingreso stock:
-                    </span>
-                    <span className="font-mono text-right border-t pt-1 text-green-600">
-                      +{quantity} unidades
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Notes */}
+            {/* ── NOTAS ── */}
             <div>
               <Label htmlFor="notes">Notas</Label>
               <textarea
                 id="notes"
-                value={form.notes}
-                onChange={set("notes")}
+                value={header.notes}
+                onChange={(e) => setHeader((h) => ({ ...h, notes: e.target.value }))}
                 placeholder="Observaciones..."
                 rows={2}
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
               />
             </div>
 
-            {/* Payments (create mode only) */}
+            {/* ── PAGOS (solo en creación) ── */}
             {!editingId && (
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -648,47 +692,33 @@ export function PurchaseDialog({
                     variant="outline"
                     size="sm"
                     onClick={addPaymentRow}
-                    disabled={payments.length >= 2}
+                    disabled={payments.length >= 3}
                   >
-                    + Agregar Pago {payments.length >= 2 && "(máx. 2)"}
+                    + Agregar Pago {payments.length >= 3 && "(máx. 3)"}
                   </Button>
                 </div>
 
                 {payments.length === 0 ? (
-                  <p className="text-xs text-gray-400">
-                    Sin pagos registrados. La compra quedará como
-                    &quot;Pendiente&quot;.
+                  <p className="text-xs text-muted-foreground">
+                    Sin pagos registrados — la compra quedará como &quot;Pendiente&quot;.
                   </p>
                 ) : (
                   <div className="space-y-2">
                     {payments.map((payment, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-[1fr_120px_140px_auto] gap-2 items-end"
-                      >
+                      <div key={idx} className="grid grid-cols-[1fr_120px_140px_auto] gap-2 items-end">
                         <div>
                           <Label className="text-xs">Método</Label>
                           <Select
                             value={payment.paymentMethodId || "none"}
-                            onValueChange={(v) =>
-                              updatePayment(
-                                idx,
-                                "paymentMethodId",
-                                v === "none" ? "" : v
-                              )
-                            }
+                            onValueChange={(v) => updatePayment(idx, "paymentMethodId", v === "none" ? "" : v)}
                           >
                             <SelectTrigger className="w-full">
                               <SelectValue placeholder="Seleccionar..." />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="none">
-                                Seleccionar...
-                              </SelectItem>
+                              <SelectItem value="none">Seleccionar...</SelectItem>
                               {paymentMethods.map((m) => (
-                                <SelectItem key={m.id} value={m.id}>
-                                  {m.name}
-                                </SelectItem>
+                                <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -700,9 +730,7 @@ export function PurchaseDialog({
                             step="0.01"
                             min="0.01"
                             value={payment.amount}
-                            onChange={(e) =>
-                              updatePayment(idx, "amount", e.target.value)
-                            }
+                            onChange={(e) => updatePayment(idx, "amount", e.target.value)}
                           />
                         </div>
                         <div>
@@ -710,9 +738,7 @@ export function PurchaseDialog({
                           <Input
                             type="date"
                             value={payment.paymentDate}
-                            onChange={(e) =>
-                              updatePayment(idx, "paymentDate", e.target.value)
-                            }
+                            onChange={(e) => updatePayment(idx, "paymentDate", e.target.value)}
                           />
                         </div>
                         <Button
@@ -726,14 +752,9 @@ export function PurchaseDialog({
                         </Button>
                       </div>
                     ))}
-                    <div className="text-xs text-gray-500 flex justify-between">
-                      <span>
-                        Total pagos: {formatCurrency(totalPayments)}
-                      </span>
-                      <span>
-                        Pendiente:{" "}
-                        {formatCurrency(Math.max(total - totalPayments, 0))}
-                      </span>
+                    <div className="text-xs text-muted-foreground flex justify-between">
+                      <span>Total pagos: {formatCurrency(totalPayments)}</span>
+                      <span>Pendiente: {formatCurrency(Math.max(grandTotal - totalPayments, 0))}</span>
                     </div>
                   </div>
                 )}
@@ -741,11 +762,9 @@ export function PurchaseDialog({
             )}
 
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={onClose}>
-                Cancelar
-              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
               <Button type="submit" disabled={loading}>
-                {loading ? "Guardando..." : "Guardar"}
+                {loading ? "Guardando..." : editingId ? "Guardar" : `Registrar${items.length > 1 ? ` (${items.length} ítems)` : ""}`}
               </Button>
             </div>
           </form>
