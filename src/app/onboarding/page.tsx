@@ -31,27 +31,40 @@ import { useAccountId } from "@/hooks/use-account-id";
 
 // ── Rubros y sus categorías sugeridas ────────────────────────────────────────
 const RUBROS = [
-  { id: "colchoneria", label: "Colchonería",    emoji: "🛏️" },
-  { id: "ropa",        label: "Indumentaria",   emoji: "👕" },
-  { id: "ferreteria",  label: "Ferretería",     emoji: "🔧" },
-  { id: "alimentos",   label: "Alimentos",      emoji: "🍞" },
-  { id: "electronica", label: "Electrónica",    emoji: "📱" },
-  { id: "muebles",     label: "Muebles / Deco", emoji: "🪑" },
-  { id: "servicios",   label: "Servicios",      emoji: "🛠️" },
-  { id: "otro",        label: "Otro rubro",     emoji: "📦" },
+  { id: "fabricacion",         label: "Fabricación",              emoji: "🏭" },
+  { id: "gastronomia",         label: "Gastronomía",              emoji: "🍽️" },
+  { id: "reventa_minorista",   label: "Reventa Minorista",        emoji: "🛍️" },
+  { id: "distribuidor",        label: "Distribuidor / Mayorista", emoji: "📦" },
+  { id: "servicios_esteticos", label: "Servicios Estéticos",      emoji: "✂️" },
+  { id: "servicios_prof",      label: "Servicios Profesionales",  emoji: "💼" },
+  { id: "servicios",           label: "Servicios",                emoji: "🛠️" },
+  { id: "otro",                label: "Otros",                    emoji: "🔹" },
 ] as const;
 
 type RubroId = typeof RUBROS[number]["id"];
 
+// Subcategorías sugeridas por rubro
 const CATS_BY_RUBRO: Record<RubroId, string[]> = {
-  colchoneria:  ["Colchones", "Sommiers", "Almohadas", "Cubresommiers", "Bauleras", "Blanquería", "Accesorios", "Varios"],
-  ropa:         ["Remeras", "Pantalones", "Calzado", "Ropa interior", "Camperas", "Accesorios", "Varios"],
-  ferreteria:   ["Herramientas", "Electricidad", "Plomería", "Pinturas", "Fijaciones", "Seguridad", "Varios"],
-  alimentos:    ["Panadería", "Fiambrería", "Bebidas", "Lácteos", "Frutas y verduras", "Secos", "Varios"],
-  electronica:  ["Celulares", "Computación", "Accesorios", "Audio y video", "Repuestos", "Varios"],
-  muebles:      ["Living", "Dormitorio", "Comedor", "Oficina", "Iluminación", "Decoración", "Varios"],
-  servicios:    ["Mano de obra", "Instalación", "Mantenimiento", "Consultoría", "Otros servicios"],
-  otro:         ["Productos", "Servicios", "Materia prima", "Varios"],
+  fabricacion:         ["Producto terminado", "Materia prima", "Insumos", "Packaging", "Mano de obra", "Varios"],
+  gastronomia:         ["Platos", "Bebidas", "Entradas", "Postres", "Insumos", "Delivery", "Varios"],
+  reventa_minorista:   ["Indumentaria", "Calzado", "Accesorios", "Electrónica", "Hogar", "Alimentos", "Varios"],
+  distribuidor:        ["Línea A", "Línea B", "Línea C", "Insumos", "Varios"],
+  servicios_esteticos: ["Corte y peinado", "Coloración", "Tratamientos", "Uñas", "Estética facial", "Depilación", "Otros servicios"],
+  servicios_prof:      ["Consultoría", "Honorarios", "Proyectos", "Informes", "Otros servicios"],
+  servicios:           ["Mano de obra", "Instalación", "Mantenimiento", "Reparación", "Otros servicios"],
+  otro:                ["Productos", "Servicios", "Materia prima", "Varios"],
+};
+
+// Pregunta de subcategoría por rubro (qué fabricás, qué vendés, etc.)
+const SUBRUBRO_QUESTION: Record<RubroId, string> = {
+  fabricacion:         "¿Qué fabricás?",
+  gastronomia:         "¿Qué tipo de gastronomía?",
+  reventa_minorista:   "¿Qué productos revendés?",
+  distribuidor:        "¿Qué distribuís?",
+  servicios_esteticos: "¿Cuál es tu servicio principal?",
+  servicios_prof:      "¿En qué área profesional?",
+  servicios:           "¿Qué tipo de servicio?",
+  otro:                "¿A qué te dedicás?",
 };
 
 // ── Confetti ─────────────────────────────────────────────────────────────────
@@ -199,6 +212,46 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 // ── Step 1: Rubro ─────────────────────────────────────────────────────────────
 function StepRubro({ onNext }: { onNext: (rubro: RubroId) => void }) {
   const [selected, setSelected] = useState<RubroId | null>(null);
+  const [subPhase, setSubPhase] = useState(false);
+  const [subrubro, setSubrubro] = useState("");
+
+  if (subPhase && selected) {
+    const question = SUBRUBRO_QUESTION[selected];
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">{question}</h2>
+          <p className="text-muted-foreground text-sm mt-1.5">
+            Esto nos ayuda a personalizar mejor tu experiencia. Si no sabés qué poner, dejalo en blanco.
+          </p>
+        </div>
+        <input
+          type="text"
+          placeholder="Ej: ropa de mujer, tortas artesanales, plomería..."
+          value={subrubro}
+          onChange={(e) => setSubrubro(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onNext(selected)}
+          autoFocus
+          className="w-full h-11 rounded-xl border border-border bg-card px-4 text-sm outline-none focus:ring-1 focus:ring-primary transition-all placeholder:text-muted-foreground"
+        />
+        <div className="space-y-2">
+          <Button
+            className="w-full h-11 font-semibold gap-2"
+            onClick={() => onNext(selected)}
+          >
+            Continuar
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+          <button
+            onClick={() => setSubPhase(false)}
+            className="w-full text-sm text-muted-foreground/50 hover:text-muted-foreground transition-colors py-2"
+          >
+            ← Cambiar rubro
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -244,7 +297,7 @@ function StepRubro({ onNext }: { onNext: (rubro: RubroId) => void }) {
 
       <Button
         className="w-full h-11 font-semibold gap-2"
-        onClick={() => selected && onNext(selected)}
+        onClick={() => selected && setSubPhase(true)}
         disabled={!selected}
       >
         Continuar
@@ -441,7 +494,7 @@ function StepSupplier({ onNext }: { onNext: () => void }) {
         </div>
       </div>
 
-      <div className="space-y-2">
+      <div className="space-y-3">
         <Button
           className="w-full h-11 font-semibold gap-2"
           onClick={handleSubmit}
@@ -451,12 +504,14 @@ function StepSupplier({ onNext }: { onNext: () => void }) {
           Agregar proveedor
           {!loading && <ArrowRight className="w-4 h-4" />}
         </Button>
-        <button
-          onClick={onNext}
-          className="w-full text-sm text-muted-foreground/50 hover:text-muted-foreground transition-colors py-2"
-        >
-          No tengo proveedor todavía →
-        </button>
+        <div className="flex justify-end">
+          <button
+            onClick={onNext}
+            className="text-xs text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+          >
+            Saltar por ahora
+          </button>
+        </div>
       </div>
     </div>
   );

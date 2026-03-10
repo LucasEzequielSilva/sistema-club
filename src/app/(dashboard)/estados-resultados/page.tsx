@@ -328,9 +328,9 @@ export default function EstadosResultadosPage() {
 
                   {/* Economic Grid */}
                   <div className="rounded-xl border border-border bg-card overflow-hidden">
-                    <div className="px-5 py-3 bg-muted/30 border-b border-border">
+                     <div className="px-5 py-3 bg-muted/30 border-b border-border">
                       <h3 className="font-semibold text-foreground">Estado Económico — {annualData.year}</h3>
-                      <p className="text-xs text-muted-foreground">Por fecha de transacción</p>
+                       <p className="text-xs text-muted-foreground">Por fecha de transacción · Costos Variables = CMV de ventas + compras de tipo variable</p>
                     </div>
                     <div className="overflow-x-auto">
                       <Table>
@@ -444,13 +444,13 @@ export default function EstadosResultadosPage() {
                             </TableCell>
                           </TableRow>
 
-                          {/* EBITDA */}
-                          <TableRow style={{ backgroundColor: "var(--info-muted)" }}>
+                          {/* Resultado Bruto */}
+                           <TableRow style={{ backgroundColor: "var(--info-muted)" }}>
                             <TableCell
                               className="font-semibold sticky left-0"
                               style={{ backgroundColor: "var(--info-muted)", color: "var(--info-muted-foreground)" }}
                             >
-                              = EBITDA
+                              = Resultado Bruto
                             </TableCell>
                             {annualData.months.map((m: any) => (
                               <TableCell

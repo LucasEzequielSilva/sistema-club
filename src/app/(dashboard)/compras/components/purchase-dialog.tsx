@@ -41,6 +41,8 @@ type InlinePayment = {
   paymentDate: string;
 };
 
+type IvaMode = "0" | "10.5" | "21" | "custom";
+
 type FormState = {
   supplierId: string;
   productId: string;
@@ -51,9 +53,11 @@ type FormState = {
   quantity: string;
   discountPct: string;
   ivaAmount: string;
+  ivaMode: IvaMode;
   invoiceNumber: string;
   dueDate: string;
   notes: string;
+  updateProductCost: boolean;
 };
 
 const EMPTY: FormState = {
@@ -66,9 +70,11 @@ const EMPTY: FormState = {
   quantity: "1",
   discountPct: "0",
   ivaAmount: "0",
+  ivaMode: "21",
   invoiceNumber: "",
   dueDate: "",
   notes: "",
+  updateProductCost: true,
 };
 
 function formatCurrency(n: number) {
@@ -166,11 +172,13 @@ export function PurchaseDialog({
             quantity: String(p.quantity),
             discountPct: String(p.discountPct),
             ivaAmount: String(p.ivaAmount),
+            ivaMode: "custom",
             invoiceNumber: p.invoiceNumber ?? "",
             dueDate: p.dueDate
               ? new Date(p.dueDate).toISOString().split("T")[0]
               : "",
             notes: p.notes ?? "",
+            updateProductCost: false,
           });
         })
         .catch(() => toast.error("No se pudo cargar la compra"))
@@ -190,8 +198,16 @@ export function PurchaseDialog({
   const unitCost = parseFloat(form.unitCost) || 0;
   const quantity = parseFloat(form.quantity) || 0;
   const discountPct = parseFloat(form.discountPct) || 0;
-  const ivaAmount = parseFloat(form.ivaAmount) || 0;
   const subtotal = unitCost * quantity * (1 - discountPct / 100);
+
+  // IVA calculado según el modo
+  const computedIva: number = (() => {
+    if (form.ivaMode === "0") return 0;
+    if (form.ivaMode === "10.5") return Math.round(subtotal * 0.105 * 100) / 100;
+    if (form.ivaMode === "21") return Math.round(subtotal * 0.21 * 100) / 100;
+    return parseFloat(form.ivaAmount) || 0; // custom
+  })();
+  const ivaAmount = computedIva;
   const total = subtotal + ivaAmount;
   const totalPayments = payments.reduce(
     (sum, p) => sum + (parseFloat(p.amount) || 0),
@@ -289,6 +305,22 @@ export function PurchaseDialog({
           notes: form.notes || undefined,
           payments: validPayments,
         });
+
+        // Si corresponde, actualizar el costo del producto
+        if (isProductPurchase && form.updateProductCost && form.productId) {
+          try {
+            await trpc.productos.update.mutate({
+              id: form.productId,
+              acquisitionCost: unitCost,
+              rawMaterialCost: 0,
+              laborCost: 0,
+              packagingCost: 0,
+            });
+          } catch {
+            // No crítico — la compra ya se guardó
+          }
+        }
+
         toast.success("Compra registrada");
       }
       onSuccess();
@@ -458,8 +490,8 @@ export function PurchaseDialog({
               </div>
             </div>
 
-            {/* Quantity + Cost + Discount + IVA */}
-            <div className="grid grid-cols-4 gap-3">
+            {/* Quantity + Cost + Discount */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label htmlFor="quantity">
                   Cantidad <span className="text-red-500">*</span>
@@ -476,17 +508,21 @@ export function PurchaseDialog({
               </div>
               <div>
                 <Label htmlFor="unitCost">
-                  Costo Unitario <span className="text-red-500">*</span>
+                  Costo Unitario (sin IVA) <span className="text-red-500">*</span>
                 </Label>
-                <Input
-                  id="unitCost"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.unitCost}
-                  onChange={set("unitCost")}
-                  required
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input
+                    id="unitCost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.unitCost}
+                    onChange={set("unitCost")}
+                    required
+                    className="pl-7"
+                  />
+                </div>
               </div>
               <div>
                 <Label htmlFor="discountPct">Descuento %</Label>
@@ -500,18 +536,65 @@ export function PurchaseDialog({
                   onChange={set("discountPct")}
                 />
               </div>
-              <div>
-                <Label htmlFor="ivaAmount">IVA ($)</Label>
-                <Input
-                  id="ivaAmount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.ivaAmount}
-                  onChange={set("ivaAmount")}
-                />
-              </div>
             </div>
+
+            {/* IVA */}
+            <div className="space-y-2">
+              <Label>IVA</Label>
+              <div className="flex gap-2 flex-wrap">
+                {(["0", "10.5", "21", "custom"] as IvaMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, ivaMode: mode }))}
+                    className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                      form.ivaMode === mode
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border text-muted-foreground hover:border-primary/40"
+                    }`}
+                  >
+                    {mode === "0" ? "Sin IVA" : mode === "custom" ? "Otro monto" : `${mode}%`}
+                  </button>
+                ))}
+              </div>
+              {form.ivaMode === "custom" ? (
+                <div className="relative max-w-[180px]">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.ivaAmount}
+                    onChange={set("ivaAmount")}
+                    placeholder="Monto IVA..."
+                    className="pl-7"
+                  />
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  IVA calculado: <span className="font-mono font-medium">${ivaAmount.toFixed(2)}</span>
+                  {form.ivaMode !== "0" && (
+                    <span className="ml-1 text-muted-foreground/60">({form.ivaMode}% sobre subtotal)</span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            {/* Actualizar costo del producto (solo si hay producto seleccionado) */}
+            {isProductPurchase && !editingId && (
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <input
+                  type="checkbox"
+                  id="updateProductCost"
+                  checked={form.updateProductCost}
+                  onChange={(e) => setForm((prev) => ({ ...prev, updateProductCost: e.target.checked }))}
+                  className="h-4 w-4 rounded border-border"
+                />
+                <label htmlFor="updateProductCost" className="text-sm text-foreground">
+                  Actualizar el costo del producto con el precio de esta compra
+                </label>
+              </div>
+            )}
 
             {/* Live Preview */}
             <div className="bg-slate-50 rounded-lg p-4 space-y-1 text-sm">

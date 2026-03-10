@@ -208,7 +208,7 @@ export function ProductDetail({
       <Tabs defaultValue="info">
         <TabsList>
           <TabsTrigger value="info">Información</TabsTrigger>
-          <TabsTrigger value="pricing">Costos y Precios</TabsTrigger>
+          <TabsTrigger value="pricing">Precio de Venta / Markup</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
         </TabsList>
 

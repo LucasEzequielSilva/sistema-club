@@ -1,0 +1,208 @@
+{
+  "timestamp": "2026-03-09T22:32:57.153053",
+  "results": [
+    {
+      "module": "Login",
+      "test": "Credenciales incorrectas muestran error",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Login",
+      "test": "Login correcto redirige a dashboard",
+      "status": "OK",
+      "detail": "https://randazzo.vercel.app/onboarding"
+    },
+    {
+      "module": "Tablero",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Tablero",
+      "test": "Filtro 'Este Mes'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Tablero",
+      "test": "Filtro 'Mes Anterior'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Tablero",
+      "test": "Filtro 'Trimestre'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Tablero",
+      "test": "Filtro 'A\u00f1o'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "POS",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "POS",
+      "test": "B\u00fasqueda de producto",
+      "status": "OK",
+      "detail": "5 resultados en dropdown"
+    },
+    {
+      "module": "Ventas",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Ventas",
+      "test": "Bot\u00f3n nueva venta visible",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Compras",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Compras",
+      "test": "Bot\u00f3n nueva compra visible",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Productos",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Productos",
+      "test": "Formulario nuevo producto abre",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Proveedores",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Proveedores",
+      "test": "Lista de proveedores",
+      "status": "OK",
+      "detail": "5 items"
+    },
+    {
+      "module": "Clasificaciones",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Clasificaciones",
+      "test": "Tab 'Productos'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Clasificaciones",
+      "test": "Tab 'Costos'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Clasificaciones",
+      "test": "Tab 'M\u00e9todos de Pago'",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Mercader\u00eda",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Finanzas",
+      "test": "Resumen carga sin error",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Finanzas",
+      "test": "Cashflow carga sin error",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Finanzas",
+      "test": "Cuadro KPIs carga sin error",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Finanzas",
+      "test": "Estados carga sin error",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Finanzas",
+      "test": "Cuentas carga sin error",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Settings",
+      "test": "P\u00e1gina carga",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Settings",
+      "test": "Usuarios listados",
+      "status": "OK",
+      "detail": "3 usuarios"
+    },
+    {
+      "module": "Settings",
+      "test": "Formulario nuevo usuario abre",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Clubi",
+      "test": "Asistente abre",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Clubi",
+      "test": "Asistente responde",
+      "status": "OK",
+      "detail": ""
+    },
+    {
+      "module": "Logout",
+      "test": "Logout redirige a /login",
+      "status": "OK",
+      "detail": ""
+    }
+  ],
+  "summary": {
+    "ok": 33,
+    "fail": 0,
+    "total": 33
+  }
+}

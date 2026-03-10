@@ -40,10 +40,7 @@ type FormState = {
   origin: string;
   initialStock: string;
   minStock: string;
-  acquisitionCost: string;
-  rawMaterialCost: string;
-  laborCost: string;
-  packagingCost: string;
+  unitCost: string;
   isActive: boolean;
 };
 
@@ -57,10 +54,7 @@ const EMPTY: FormState = {
   origin: "comprado",
   initialStock: "0",
   minStock: "0",
-  acquisitionCost: "0",
-  rawMaterialCost: "0",
-  laborCost: "0",
-  packagingCost: "0",
+  unitCost: "0",
   isActive: true,
 };
 
@@ -109,6 +103,12 @@ export function ProductDialog({
       trpc.productos.getById
         .query({ id: editingId })
         .then((p) => {
+          // unitCost es la suma de los 4 campos del server
+          const total =
+            (p.acquisitionCost || 0) +
+            (p.rawMaterialCost || 0) +
+            (p.laborCost || 0) +
+            (p.packagingCost || 0);
           setForm({
             name: p.name,
             categoryId: p.categoryId,
@@ -119,10 +119,7 @@ export function ProductDialog({
             origin: p.origin,
             initialStock: String(p.initialStock),
             minStock: String(p.minStock),
-            acquisitionCost: String(p.acquisitionCost),
-            rawMaterialCost: String(p.rawMaterialCost),
-            laborCost: String(p.laborCost),
-            packagingCost: String(p.packagingCost),
+            unitCost: String(total),
             isActive: p.isActive,
           });
         })
@@ -138,12 +135,6 @@ export function ProductDialog({
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
 
-  const unitCost =
-    parseFloat(form.acquisitionCost || "0") +
-    parseFloat(form.rawMaterialCost || "0") +
-    parseFloat(form.laborCost || "0") +
-    parseFloat(form.packagingCost || "0");
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -155,6 +146,7 @@ export function ProductDialog({
     setLoading(true);
 
     try {
+      const cost = parseFloat(form.unitCost) || 0;
       if (editingId) {
         await trpc.productos.update.mutate({
           id: editingId,
@@ -167,10 +159,10 @@ export function ProductDialog({
           origin: form.origin as any,
           initialStock: parseFloat(form.initialStock) || 0,
           minStock: parseFloat(form.minStock) || 0,
-          acquisitionCost: parseFloat(form.acquisitionCost) || 0,
-          rawMaterialCost: parseFloat(form.rawMaterialCost) || 0,
-          laborCost: parseFloat(form.laborCost) || 0,
-          packagingCost: parseFloat(form.packagingCost) || 0,
+          acquisitionCost: cost,
+          rawMaterialCost: 0,
+          laborCost: 0,
+          packagingCost: 0,
           isActive: form.isActive,
         });
         toast.success(`"${form.name}" actualizado`);
@@ -186,10 +178,10 @@ export function ProductDialog({
           origin: form.origin as any,
           initialStock: parseFloat(form.initialStock) || 0,
           minStock: parseFloat(form.minStock) || 0,
-          acquisitionCost: parseFloat(form.acquisitionCost) || 0,
-          rawMaterialCost: parseFloat(form.rawMaterialCost) || 0,
-          laborCost: parseFloat(form.laborCost) || 0,
-          packagingCost: parseFloat(form.packagingCost) || 0,
+          acquisitionCost: cost,
+          rawMaterialCost: 0,
+          laborCost: 0,
+          packagingCost: 0,
         });
         toast.success(`"${form.name}" creado`);
       }
@@ -343,66 +335,27 @@ export function ProductDialog({
               </div>
             </div>
 
-            {/* Cost Components */}
+            {/* Cost — un único campo */}
             <div>
-              <Label className="text-base font-semibold">
-                Componentes del Costo
+              <Label htmlFor="unitCost" className="text-base font-semibold">
+                Costo unitario
               </Label>
-              <p className="text-xs text-gray-400 mb-2">
-                Costo unitario = Adquisición + Materia Prima + Mano de Obra +
-                Packaging
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                Ingresá el costo SIN IVA (salvo que seas monotributista, en cuyo caso podés incluirlo).
               </p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="acquisitionCost">Adquisición ($)</Label>
-                  <Input
-                    id="acquisitionCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.acquisitionCost}
-                    onChange={set("acquisitionCost")}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="rawMaterialCost">Materia Prima ($)</Label>
-                  <Input
-                    id="rawMaterialCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.rawMaterialCost}
-                    onChange={set("rawMaterialCost")}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="laborCost">Mano de Obra ($)</Label>
-                  <Input
-                    id="laborCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.laborCost}
-                    onChange={set("laborCost")}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="packagingCost">Packaging ($)</Label>
-                  <Input
-                    id="packagingCost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={form.packagingCost}
-                    onChange={set("packagingCost")}
-                  />
-                </div>
-              </div>
-              <div className="mt-2 p-2 bg-slate-50 rounded text-sm font-medium">
-                Costo Unitario Total:{" "}
-                <span className="font-bold">
-                  ${unitCost.toFixed(2)}
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                  $
                 </span>
+                <Input
+                  id="unitCost"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={form.unitCost}
+                  onChange={set("unitCost")}
+                  className="pl-7"
+                />
               </div>
             </div>
 

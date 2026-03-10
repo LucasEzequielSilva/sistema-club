@@ -109,12 +109,12 @@ const PAGE_LABELS: Record<string, string> = {
   "/facturacion": "Facturación AFIP",
 };
 
-const WELCOME = `¡Hola! Soy **Clubi**, tu asistente de Sistema Club 🤝
+const WELCOME = `¡Ey! Soy **Costito**, tu asistente de Sistema Club 🤝
 
-Puedo ayudarte a:
+Te puedo dar una mano con:
 - **Configurar** tu negocio desde cero
 - **Explicar** cómo usar cualquier módulo
-- **Analizar** tus números y darte recomendaciones
+- **Analizar** tus números y tirarte recomendaciones
 - **Responder** cualquier duda de gestión
 
 ¿Por dónde arrancamos?`;
@@ -468,18 +468,18 @@ export function AIAssistant() {
     setLoading(false);
   };
 
-  // Auto-saludo diario: una vez por día, Clubi dice buenos días
+  // Auto-saludo diario: una vez por día, Costito dice buenos días
   // Definido después de sendMessage para poder llamarlo
   useEffect(() => {
     if (isPOS) return;
     if (autoGreetingFiredRef.current) return;
     const today = new Date().toISOString().split("T")[0];
-    const lastGreeting = localStorage.getItem("clubiLastGreeting");
+    const lastGreeting = localStorage.getItem("costitoLastGreeting");
     if (lastGreeting === today) return;
 
     autoGreetingFiredRef.current = true;
     const timer = setTimeout(() => {
-      localStorage.setItem("clubiLastGreeting", today);
+      localStorage.setItem("costitoLastGreeting", today);
       setOpen(true);
       // Esperar a que el panel abra y cargue el welcome message
       setTimeout(() => {
@@ -502,7 +502,7 @@ export function AIAssistant() {
           open && "rotate-12"
         )}
         style={{ width: 52, height: 52 }}
-        title="Asistente IA"
+        title="Costito - Asistente IA"
       >
         {open ? (
           <X className="w-5 h-5" />
@@ -527,7 +527,7 @@ export function AIAssistant() {
             <Bot className="w-4 h-4" />
           </div>
           <div className="flex-1 leading-none">
-            <p className="text-sm font-semibold">Clubi</p>
+            <p className="text-sm font-semibold">Costito</p>
             <p className="text-[11px] opacity-60 mt-0.5">
               {currentPage ? `Estás en ${currentPage}` : "Asistente IA"}
             </p>
@@ -738,7 +738,7 @@ export function AIAssistant() {
               <div className="flex flex-col items-center justify-center h-full gap-2 px-6 text-center">
                 <Brain className="w-8 h-8 text-muted-foreground/40" />
                 <p className="text-sm text-muted-foreground">
-                  Todavía no guardé nada sobre vos.
+                  Todavía no guardé nada tuyo, Costito está atento.
                 </p>
                 <p className="text-xs text-muted-foreground/60">
                   A medida que charlamos, voy aprendiendo cosas de tu negocio y las guardo acá.

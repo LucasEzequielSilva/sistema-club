@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
+import { ExternalLink } from "lucide-react";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -52,6 +54,7 @@ export function ProductPricingTab({
   product,
   onUpdate,
 }: ProductPricingTabProps) {
+  const router = useRouter();
   const [markups, setMarkups] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     product.pricingByList.forEach((item) => {
@@ -134,10 +137,23 @@ export function ProductPricingTab({
       </div>
 
       {product.pricingByList.length === 0 ? (
-        <p className="text-gray-400 text-center py-8">
-          No hay listas de precios configuradas. Crea listas desde
-          Clasificaciones.
-        </p>
+        <div className="text-center py-10 space-y-3">
+          <p className="text-muted-foreground text-sm">
+            No hay listas de precios configuradas todavía.
+          </p>
+          <p className="text-xs text-muted-foreground/70 max-w-xs mx-auto">
+            Primero creá una lista de precios (ej: &quot;Minorista&quot;, &quot;Mayorista&quot;) y después podrás definir el markup y precio de venta para cada producto.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push("/clasificaciones")}
+            className="gap-1.5"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            Ir a Clasificaciones → Listas de Precios
+          </Button>
+        </div>
       ) : (
         <Table>
           <TableHeader>

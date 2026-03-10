@@ -144,13 +144,20 @@ export function CostCategoryDialog({
           </div>
 
           <div>
-            <Label htmlFor="sortOrder">Orden</Label>
+            <Label htmlFor="sortOrder">
+              Orden de aparición{" "}
+              <span className="text-muted-foreground font-normal text-xs">(opcional)</span>
+            </Label>
             <Input
               id="sortOrder"
               type="number"
               value={sortOrder}
               onChange={(e) => setSortOrder(e.target.value)}
+              placeholder="0"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Número que define el orden en el que aparece esta clasificación en las listas (0 = primero). Podés dejarlo en 0.
+            </p>
           </div>
 
           {editingId && (

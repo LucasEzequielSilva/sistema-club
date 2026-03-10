@@ -5,8 +5,16 @@ import { trpc } from "@/lib/trpc-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Check, Eye, EyeOff, ShieldCheck, User, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, Eye, EyeOff, ShieldCheck, User, Loader2, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+type AccountConfig = {
+  id: string;
+  name: string;
+  taxStatus: string;
+  ivaRate: number;
+  includeIvaInCost: boolean;
+};
 
 type UserRow = {
   id: string;
@@ -34,6 +42,10 @@ export default function SettingsPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Configuración del negocio
+  const [account, setAccount] = useState<AccountConfig | null>(null);
+  const [accountSaving, setAccountSaving] = useState(false);
+
   const load = useCallback(async (aid: string) => {
     setLoading(true);
     try {
@@ -56,7 +68,39 @@ export default function SettingsPage() {
         }
       })
       .catch(() => toast.error("Error al obtener la sesión."));
+
+    fetch("/api/account")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.id) setAccount(data);
+      })
+      .catch(() => {});
   }, [load]);
+
+  const handleAccountSave = async () => {
+    if (!account) return;
+    setAccountSaving(true);
+    try {
+      const res = await fetch("/api/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taxStatus: account.taxStatus,
+          ivaRate: account.ivaRate,
+          includeIvaInCost: account.includeIvaInCost,
+          name: account.name,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || "Error al guardar"); return; }
+      setAccount(data);
+      toast.success("Configuración del negocio guardada");
+    } catch {
+      toast.error("Error al guardar");
+    } finally {
+      setAccountSaving(false);
+    }
+  };
 
   const handleCreate = async () => {
     if (!accountId) return;
@@ -114,7 +158,95 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-2xl space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="max-w-2xl space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+
+      {/* ── Configuración del negocio ── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-primary" />
+          <h2 className="text-lg font-semibold text-foreground">Configuración del negocio</h2>
+        </div>
+
+        {account ? (
+          <div className="border border-border rounded-xl p-5 space-y-5 bg-card">
+            {/* Nombre */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Nombre del negocio</label>
+              <Input
+                value={account.name}
+                onChange={(e) => setAccount((a) => a ? { ...a, name: e.target.value } : a)}
+                placeholder="Ej: Mi Negocio SA"
+              />
+            </div>
+
+            {/* Régimen fiscal */}
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Régimen fiscal</label>
+              <p className="text-xs text-muted-foreground/70">
+                Esto afecta cómo se calculan los precios con IVA y los análisis económicos.
+              </p>
+              <div className="flex gap-2">
+                {(["monotributista", "responsable_inscripto"] as const).map((ts) => (
+                  <button
+                    key={ts}
+                    onClick={() => setAccount((a) => a ? { ...a, taxStatus: ts } : a)}
+                    className={cn(
+                      "flex-1 py-2.5 px-3 rounded-xl border text-sm font-medium transition-all",
+                      account.taxStatus === ts
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-card border-border text-muted-foreground hover:border-primary/30"
+                    )}
+                  >
+                    {ts === "monotributista" ? "Monotributista" : "Responsable Inscripto (RI)"}
+                  </button>
+                ))}
+              </div>
+              {account.taxStatus === "monotributista" && (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                  Como monotributista, el IVA está incluido en tus precios de venta. No discriminás IVA en facturas.
+                </p>
+              )}
+              {account.taxStatus === "responsable_inscripto" && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+                    Como RI, discriminás IVA en facturas. Los precios de venta se muestran con y sin IVA.
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <label className="text-xs font-medium text-muted-foreground">Alícuota IVA:</label>
+                    <div className="flex gap-1.5">
+                      {[21, 10.5].map((rate) => (
+                        <button
+                          key={rate}
+                          onClick={() => setAccount((a) => a ? { ...a, ivaRate: rate } : a)}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg border text-xs font-medium transition-all",
+                            account.ivaRate === rate
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-card border-border text-muted-foreground hover:border-primary/30"
+                          )}
+                        >
+                          {rate}%
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <Button size="sm" onClick={handleAccountSave} disabled={accountSaving} className="gap-1.5">
+              {accountSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              {accountSaving ? "Guardando..." : "Guardar configuración"}
+            </Button>
+          </div>
+        ) : (
+          <div className="border border-border rounded-xl p-5 flex justify-center">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        )}
+      </div>
+
+      {/* ── Usuarios ── */}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
