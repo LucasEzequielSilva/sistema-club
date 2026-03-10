@@ -66,6 +66,33 @@ async function loadMemories(accountId: string): Promise<string> {
 }
 
 // ─── Auto-extraer y guardar memorias post-conversación ───────────────────────
+// Extrae palabras clave significativas de un texto (ignora stopwords)
+function keywordsOf(text: string): Set<string> {
+  const stopwords = new Set([
+    "el", "la", "los", "las", "un", "una", "de", "del", "en", "es", "son",
+    "que", "y", "o", "a", "con", "por", "se", "no", "su", "al", "lo",
+    "hay", "hay", "tiene", "tienen", "tenés", "para", "como", "más",
+    "the", "is", "are", "and", "or", "of", "in", "to", "a",
+  ]);
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^a-záéíóúüñ0-9\s]/gi, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !stopwords.has(w))
+  );
+}
+
+// Similaridad de Jaccard entre dos textos (0 = distintos, 1 = idénticos)
+function jaccardSimilarity(a: string, b: string): number {
+  const ka = keywordsOf(a);
+  const kb = keywordsOf(b);
+  if (ka.size === 0 && kb.size === 0) return 1;
+  const intersection = new Set([...ka].filter((w) => kb.has(w)));
+  const union = new Set([...ka, ...kb]);
+  return intersection.size / union.size;
+}
+
 async function extractAndSaveMemories(
   userMessage: string,
   assistantResponse: string,
@@ -77,40 +104,68 @@ async function extractAndSaveMemories(
       messages: [
         {
           role: "system",
-          content: `Sos un extractor de hechos. Dado un intercambio de chat, extraé hechos concretos y útiles sobre el USUARIO o su NEGOCIO que valga la pena recordar a futuro.
-Devolvé SOLO un JSON válido con este formato exacto:
-{"memories": [{"category": "negocio|productos|preferencias|finanzas|contexto", "content": "hecho concreto en una oración"}]}
-Si no hay nada relevante, devolvé: {"memories": []}
-No incluyas información trivial, saludos, ni cosas que ya son obvias del sistema.`,
+          content: `Sos un extractor de hechos. Dado un intercambio de chat, extraé hechos NUEVOS y concretos sobre el USUARIO o su NEGOCIO.
+REGLAS ESTRICTAS:
+- Solo extraé información que el USUARIO compartió explícitamente (no lo que el asistente calculó)
+- NO extraer datos que ya son visibles en el sistema (cantidad de productos, proveedores, etc.)
+- NO extraer estados temporales ("el tablero está vacío", "está empezando")
+- SÍ extraer: nombre del rubro, metas, preferencias, datos personales del negocio, estrategias
+- Máximo 2 hechos por intercambio
+Devolvé SOLO un JSON: {"memories": [{"category": "negocio|productos|preferencias|finanzas|contexto", "content": "hecho"}]}
+Si no hay nada nuevo relevante, devolvé: {"memories": []}`,
         },
         {
           role: "user",
-          content: `Usuario dijo: "${userMessage}"\nAsistente respondió: "${assistantResponse.slice(0, 500)}"`,
+          content: `Usuario dijo: "${userMessage.slice(0, 300)}"\nAsistente respondió: "${assistantResponse.slice(0, 300)}"`,
         },
       ],
-      max_tokens: 300,
+      max_tokens: 200,
       temperature: 0.1,
     });
 
     const raw = extraction.choices[0]?.message?.content?.trim() || "{}";
-    // Extraer JSON aunque venga con texto alrededor
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) return;
 
     const parsed = JSON.parse(match[0]);
-    const memories: Array<{ category: string; content: string }> = parsed.memories || [];
+    const newMems: Array<{ category: string; content: string }> = parsed.memories || [];
+    if (!newMems.length) return;
 
-    for (const mem of memories) {
-      if (!mem.category || !mem.content) continue;
-      // Evitar duplicados similares (comparación simple)
-      const existing = await db.userMemory.findFirst({
-        where: {
-          accountId,
-          content: { contains: mem.content.slice(0, 30) },
-        },
-      });
-      if (!existing) {
-        await db.userMemory.create({
+    // Cargar memorias existentes para comparar
+    const existing = await db.userMemory.findMany({
+      where: { accountId },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    // Límite total: 15 memorias por cuenta
+    const MAX_MEMORIES = 15;
+
+    for (const mem of newMems) {
+      if (!mem.category || !mem.content?.trim()) continue;
+
+      // Buscar memoria existente similar (Jaccard >= 0.4)
+      const similar = existing.find(
+        (e) => jaccardSimilarity(e.content, mem.content) >= 0.4
+      );
+
+      if (similar) {
+        // Actualizar la existente si el contenido nuevo es más informativo (más largo)
+        if (mem.content.length > similar.content.length) {
+          await db.userMemory.update({
+            where: { id: similar.id },
+            data: { content: mem.content, updatedAt: new Date() },
+          });
+        }
+        // Si es muy similar pero no más informativo, ignorar
+      } else {
+        // Nueva memoria — verificar límite
+        if (existing.length >= MAX_MEMORIES) {
+          // Eliminar la más antigua para hacer lugar
+          const oldest = existing[existing.length - 1];
+          await db.userMemory.delete({ where: { id: oldest.id } });
+          existing.pop();
+        }
+        const created = await db.userMemory.create({
           data: {
             accountId,
             category: mem.category,
@@ -118,6 +173,7 @@ No incluyas información trivial, saludos, ni cosas que ya son obvias del sistem
             source: "auto",
           },
         });
+        existing.unshift(created as any);
       }
     }
   } catch {
