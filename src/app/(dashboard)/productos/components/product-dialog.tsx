@@ -41,6 +41,8 @@ type FormState = {
   initialStock: string;
   minStock: string;
   unitCost: string;
+  markup: string;
+  salePrice: string;
   isActive: boolean;
 };
 
@@ -55,6 +57,8 @@ const EMPTY: FormState = {
   initialStock: "0",
   minStock: "0",
   unitCost: "0",
+  markup: "",
+  salePrice: "",
   isActive: true,
 };
 
@@ -74,6 +78,7 @@ export function ProductDialog({
   const [fetching, setFetching] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [priceListName, setPriceListName] = useState<string | null>(null);
 
   // Load categories + suppliers
   useEffect(() => {
@@ -100,15 +105,36 @@ export function ProductDialog({
 
     if (editingId) {
       setFetching(true);
-      trpc.productos.getById
-        .query({ id: editingId })
-        .then((p) => {
-          // unitCost es la suma de los 4 campos del server
+
+      Promise.all([
+        trpc.productos.getById.query({ id: editingId }),
+        fetch(`/api/price-lists/items?productId=${editingId}`).then((r) =>
+          r.ok ? r.json() : { markupPct: null, priceListName: null }
+        ),
+      ])
+        .then(([p, priceData]) => {
           const total =
             (p.acquisitionCost || 0) +
             (p.rawMaterialCost || 0) +
             (p.laborCost || 0) +
             (p.packagingCost || 0);
+
+          const markupPct = priceData.markupPct;
+          setPriceListName(priceData.priceListName ?? null);
+
+          const markupStr =
+            markupPct !== null && markupPct !== undefined
+              ? String(markupPct)
+              : "";
+          const salePriceStr =
+            markupPct !== null && markupPct !== undefined && total > 0
+              ? String(
+                  parseFloat(
+                    (total * (1 + markupPct / 100)).toFixed(2)
+                  )
+                )
+              : "";
+
           setForm({
             name: p.name,
             categoryId: p.categoryId,
@@ -120,6 +146,8 @@ export function ProductDialog({
             initialStock: String(p.initialStock),
             minStock: String(p.minStock),
             unitCost: String(total),
+            markup: markupStr,
+            salePrice: salePriceStr,
             isActive: p.isActive,
           });
         })
@@ -127,6 +155,7 @@ export function ProductDialog({
         .finally(() => setFetching(false));
     } else {
       setForm(EMPTY);
+      setPriceListName(null);
     }
   }, [open, editingId]);
 
@@ -134,6 +163,47 @@ export function ProductDialog({
     (field: keyof FormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  // Cuando cambia el costo, recalcula PV manteniendo el markup
+  const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const cost = parseFloat(e.target.value) || 0;
+    setForm((prev) => {
+      const markup = parseFloat(prev.markup);
+      const newSalePrice =
+        !isNaN(markup) && prev.markup !== ""
+          ? String(parseFloat((cost * (1 + markup / 100)).toFixed(2)))
+          : prev.salePrice;
+      return { ...prev, unitCost: e.target.value, salePrice: newSalePrice };
+    });
+  };
+
+  // Cuando cambia el markup, recalcula PV
+  const handleMarkupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const markupVal = e.target.value;
+    setForm((prev) => {
+      const cost = parseFloat(prev.unitCost) || 0;
+      const markup = parseFloat(markupVal);
+      const newSalePrice =
+        !isNaN(markup) && markupVal !== "" && cost > 0
+          ? String(parseFloat((cost * (1 + markup / 100)).toFixed(2)))
+          : "";
+      return { ...prev, markup: markupVal, salePrice: newSalePrice };
+    });
+  };
+
+  // Cuando cambia el PV, recalcula markup
+  const handleSalePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const salePriceVal = e.target.value;
+    setForm((prev) => {
+      const cost = parseFloat(prev.unitCost) || 0;
+      const salePrice = parseFloat(salePriceVal);
+      const newMarkup =
+        !isNaN(salePrice) && salePriceVal !== "" && cost > 0
+          ? String(parseFloat((((salePrice - cost) / cost) * 100).toFixed(2)))
+          : "";
+      return { ...prev, salePrice: salePriceVal, markup: newMarkup };
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +217,8 @@ export function ProductDialog({
 
     try {
       const cost = parseFloat(form.unitCost) || 0;
+      let savedProductId = editingId;
+
       if (editingId) {
         await trpc.productos.update.mutate({
           id: editingId,
@@ -167,7 +239,7 @@ export function ProductDialog({
         });
         toast.success(`"${form.name}" actualizado`);
       } else {
-        await trpc.productos.create.mutate({
+        const created = await trpc.productos.create.mutate({
           accountId,
           name: form.name,
           categoryId: form.categoryId,
@@ -183,8 +255,20 @@ export function ProductDialog({
           laborCost: 0,
           packagingCost: 0,
         });
+        savedProductId = created.id;
         toast.success(`"${form.name}" creado`);
       }
+
+      // Guardar markup en la lista de precios default (si se completó)
+      const markupVal = parseFloat(form.markup);
+      if (savedProductId && form.markup !== "" && !isNaN(markupVal)) {
+        await fetch("/api/price-lists/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ productId: savedProductId, markupPct: markupVal }),
+        });
+      }
+
       onSuccess();
     } catch (err: any) {
       toast.error(err.message || "Error al guardar");
@@ -335,28 +419,78 @@ export function ProductDialog({
               </div>
             </div>
 
-            {/* Cost — un único campo */}
-            <div>
-              <Label htmlFor="unitCost" className="text-base font-semibold">
-                Costo unitario
-              </Label>
-              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
-                Ingresá el costo SIN IVA (salvo que seas monotributista, en cuyo caso podés incluirlo).
-              </p>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
-                  $
-                </span>
-                <Input
-                  id="unitCost"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={form.unitCost}
-                  onChange={set("unitCost")}
-                  className="pl-7"
-                />
+            {/* Cost + Markup + PV */}
+            <div className="space-y-3 rounded-lg border p-4 bg-muted/30">
+              <div>
+                <Label htmlFor="unitCost" className="text-base font-semibold">
+                  Costo unitario
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                  Ingresá el costo SIN IVA (salvo que seas monotributista, en cuyo caso podés incluirlo).
+                </p>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                    $
+                  </span>
+                  <Input
+                    id="unitCost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={form.unitCost}
+                    onChange={handleCostChange}
+                    className="pl-7"
+                  />
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="markup">
+                    Markup{" "}
+                    <span className="font-normal text-muted-foreground">(%)</span>
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="markup"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.markup}
+                      onChange={handleMarkupChange}
+                      placeholder="Ej: 30"
+                      className="pr-7"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="salePrice">Precio de venta</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium">
+                      $
+                    </span>
+                    <Input
+                      id="salePrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={form.salePrice}
+                      onChange={handleSalePriceChange}
+                      placeholder="Ej: 1500"
+                      className="pl-7"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                {priceListName
+                  ? `Se guarda en la lista "${priceListName}"`
+                  : 'Si completás el precio, se creará automáticamente la lista "Lista General"'}
+              </p>
             </div>
 
             {/* Stock */}
