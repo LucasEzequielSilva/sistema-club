@@ -23,6 +23,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { MerchandiseEntryDialog } from "./components/entry-dialog";
 import { StockAdjustmentDialog } from "./components/adjustment-dialog";
+import { ProductionDialog } from "./components/production-dialog";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -36,6 +37,7 @@ import {
   DollarSign,
   AlertTriangle,
   Loader2,
+  Factory,
 } from "lucide-react";
 import { useAccountId } from "@/hooks/use-account-id";
 
@@ -74,6 +76,7 @@ const MOVEMENT_LABELS: Record<string, string> = {
   sale: "Venta",
   merchandise_entry: "Ingreso mercadería",
   adjustment: "Ajuste",
+  production: "Producción",
 };
 
 // CSS-var based badge styles per movement type
@@ -102,6 +105,11 @@ const MOVEMENT_STYLES: Record<string, React.CSSProperties> = {
     backgroundColor: "var(--color-amber-100, #fef3c7)",
     color: "var(--color-amber-700, #b45309)",
     borderColor: "var(--color-amber-200, #fde68a)",
+  },
+  production: {
+    backgroundColor: "var(--color-orange-100, #ffedd5)",
+    color: "var(--color-orange-700, #c2410c)",
+    borderColor: "var(--color-orange-200, #fed7aa)",
   },
 };
 
@@ -147,6 +155,7 @@ export default function MercaderiaPage() {
   // Dialog state
   const [showEntryDialog, setShowEntryDialog] = useState(false);
   const [showAdjustmentDialog, setShowAdjustmentDialog] = useState(false);
+  const [showProductionDialog, setShowProductionDialog] = useState(false);
 
   // Products for filter dropdown
   const [products, setProducts] = useState<{ id: string; name: string }[]>([]);
@@ -195,8 +204,8 @@ export default function MercaderiaPage() {
   }, [loadData]);
 
   const handleDeleteMovement = async (id: string, type: string) => {
-    if (type !== "merchandise_entry" && type !== "adjustment") {
-      toast.error("Solo se pueden eliminar ingresos y ajustes desde aquí");
+    if (type !== "merchandise_entry" && type !== "adjustment" && type !== "production") {
+      toast.error("Solo se pueden eliminar ingresos, producciones y ajustes desde aquí");
       return;
     }
     if (!(await confirmDeleteMovement())) return;
@@ -212,6 +221,7 @@ export default function MercaderiaPage() {
   const handleDialogSuccess = () => {
     setShowEntryDialog(false);
     setShowAdjustmentDialog(false);
+    setShowProductionDialog(false);
     loadData();
   };
 
@@ -302,6 +312,10 @@ export default function MercaderiaPage() {
             <Button variant="outline" size="sm" onClick={() => setShowAdjustmentDialog(true)}>
               <SlidersHorizontal className="w-4 h-4 mr-1.5" />
               Ajuste de Stock
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowProductionDialog(true)}>
+              <Factory className="w-4 h-4 mr-1.5" />
+              Registrar Producción
             </Button>
             <Button size="sm" onClick={() => setShowEntryDialog(true)}>
               <Plus className="w-4 h-4 mr-1.5" />
@@ -396,6 +410,7 @@ export default function MercaderiaPage() {
                   Ingreso mercadería
                 </SelectItem>
                 <SelectItem value="adjustment">Ajuste</SelectItem>
+                <SelectItem value="production">Producción</SelectItem>
               </SelectContent>
             </Select>
 
@@ -456,7 +471,8 @@ export default function MercaderiaPage() {
                   {movements.map((m) => {
                     const canDelete =
                       m.movementType === "merchandise_entry" ||
-                      m.movementType === "adjustment";
+                      m.movementType === "adjustment" ||
+                      m.movementType === "production";
                     return (
                       <TableRow key={m.id} className="hover:bg-muted/40 transition-colors">
                         <TableCell className="text-sm text-muted-foreground">
@@ -633,6 +649,13 @@ export default function MercaderiaPage() {
       <StockAdjustmentDialog
         open={showAdjustmentDialog}
         onOpenChange={setShowAdjustmentDialog}
+        onSuccess={handleDialogSuccess}
+        accountId={accountId ?? ""}
+      />
+
+      <ProductionDialog
+        open={showProductionDialog}
+        onOpenChange={setShowProductionDialog}
         onSuccess={handleDialogSuccess}
         accountId={accountId ?? ""}
       />
