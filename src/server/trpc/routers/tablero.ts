@@ -167,7 +167,7 @@ export const tableroRouter = router({
             name: p.name,
             currentStock,
             minStock: p.minStock,
-            isLow: currentStock < p.minStock,
+            isLow: currentStock <= p.minStock,
           };
         })
         .filter((p) => p.isLow);

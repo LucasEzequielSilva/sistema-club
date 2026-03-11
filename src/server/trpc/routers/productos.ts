@@ -132,7 +132,7 @@ export const productosRouter = router({
         const unitCost = calcUnitCost(product);
         const currentStock =
           product.initialStock + (stockMap.get(product.id) ?? 0);
-        const isLowStock = currentStock < product.minStock;
+        const isLowStock = currentStock <= product.minStock;
 
         // Calculate default price list pricing
         const defaultPriceItem = product.priceListItems.find(

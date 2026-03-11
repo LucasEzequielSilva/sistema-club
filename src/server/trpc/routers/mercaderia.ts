@@ -122,7 +122,7 @@ export const mercaderiaRouter = router({
         const currentStock = p.initialStock + movementTotal;
         const unitCost = calcUnitCost(p);
         const valuedStock = currentStock * unitCost;
-        const isLowStock = currentStock < p.minStock;
+        const isLowStock = currentStock <= p.minStock;
 
         return {
           id: p.id,
