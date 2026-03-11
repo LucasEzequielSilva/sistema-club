@@ -79,6 +79,7 @@ export function ProductDialog({
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [priceListName, setPriceListName] = useState<string | null>(null);
+  const [currentStock, setCurrentStock] = useState<number | null>(null);
 
   // Load categories + suppliers
   useEffect(() => {
@@ -135,6 +136,7 @@ export function ProductDialog({
                 )
               : "";
 
+          setCurrentStock(p.currentStock ?? total);
           setForm({
             name: p.name,
             categoryId: p.categoryId,
@@ -156,6 +158,7 @@ export function ProductDialog({
     } else {
       setForm(EMPTY);
       setPriceListName(null);
+      setCurrentStock(null);
     }
   }, [open, editingId]);
 
@@ -229,7 +232,7 @@ export function ProductDialog({
           sku: form.sku || null,
           unit: form.unit as any,
           origin: form.origin as any,
-          initialStock: parseFloat(form.initialStock) || 0,
+          // initialStock NO se envía al editar — el stock se gestiona via compras/ventas
           minStock: parseFloat(form.minStock) || 0,
           acquisitionCost: cost,
           rawMaterialCost: 0,
@@ -495,17 +498,34 @@ export function ProductDialog({
 
             {/* Stock */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label htmlFor="initialStock">Stock Inicial</Label>
-                <Input
-                  id="initialStock"
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={form.initialStock}
-                  onChange={set("initialStock")}
-                />
-              </div>
+              {editingId ? (
+                /* Al editar: stock actual es solo lectura, no se puede manipular */
+                <div>
+                  <Label className="text-muted-foreground">Stock actual</Label>
+                  <div className="flex items-center h-9 px-3 rounded-md border border-input bg-muted/50 text-sm font-mono text-muted-foreground select-none">
+                    {currentStock ?? "—"}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Se actualiza con compras y ventas
+                  </p>
+                </div>
+              ) : (
+                /* Al crear: se puede setear el stock de apertura */
+                <div>
+                  <Label htmlFor="initialStock">Stock Inicial</Label>
+                  <Input
+                    id="initialStock"
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={form.initialStock}
+                    onChange={set("initialStock")}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Stock de apertura (solo al crear)
+                  </p>
+                </div>
+              )}
               <div>
                 <Label htmlFor="minStock">Stock Mínimo (alerta)</Label>
                 <Input
