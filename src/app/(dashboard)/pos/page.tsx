@@ -460,6 +460,87 @@ export default function PosPage() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [handleConfirm]);
 
+  // ── Print receipt ──
+  const handlePrint = () => {
+    if (!lastSale) return;
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Comprobante de Venta</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #000;
+            background: #fff;
+            width: 72mm;
+            padding: 8px;
+          }
+          .center { text-align: center; }
+          .bold { font-weight: bold; }
+          .large { font-size: 18px; font-weight: bold; }
+          .divider { border-top: 1px dashed #000; margin: 6px 0; }
+          .row { display: flex; justify-content: space-between; margin: 3px 0; }
+          .row .label { color: #555; }
+          .total-row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 14px; font-weight: bold; }
+          .footer { text-align: center; font-size: 10px; color: #555; margin-top: 10px; }
+        </style>
+      </head>
+      <body>
+        <div class="center bold" style="font-size:14px; margin-bottom:4px;">COMPROBANTE DE VENTA</div>
+        <div class="center" style="margin-bottom:2px; font-size:11px; color:#555;">${formatDate(new Date())}</div>
+        <div class="divider"></div>
+
+        <div class="row">
+          <span class="label">Producto:</span>
+          <span class="bold">${lastSale.productName}</span>
+        </div>
+        <div class="row">
+          <span class="label">Cantidad:</span>
+          <span>${lastSale.quantity}</span>
+        </div>
+        <div class="row">
+          <span class="label">Precio unitario:</span>
+          <span>${formatCurrency(lastSale.unitPrice)}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="total-row">
+          <span>TOTAL</span>
+          <span>${formatCurrency(lastSale.total)}</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="row">
+          <span class="label">Medio de pago:</span>
+          <span>${lastSale.paymentMethodName}</span>
+        </div>
+
+        <div class="footer">
+          <div>¡Gracias por su compra!</div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const win = window.open("", "_blank", "width=400,height=600");
+    if (!win) {
+      toast.error("El navegador bloqueó la ventana de impresión. Permití popups para este sitio.");
+      return;
+    }
+    win.document.write(printContent);
+    win.document.close();
+    win.focus();
+    win.print();
+    win.close();
+  };
+
   // ── Loading state ──
   if (loadingLookups) {
     return (
@@ -543,9 +624,7 @@ export default function PosPage() {
               variant="outline"
               size="sm"
               className="flex-1"
-              onClick={() => {
-                toast.info("Funcionalidad de impresion proximamente");
-              }}
+              onClick={handlePrint}
             >
               <Printer className="w-4 h-4 mr-2" />
               Imprimir
