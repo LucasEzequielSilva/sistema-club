@@ -333,15 +333,27 @@ function StepCategories({ rubro, onNext }: { rubro: RubroId; onNext: (id: string
     if (selected.length === 0) return;
     setLoading(true);
     try {
-      const results = await Promise.all(
-        selected.map((name) =>
-          trpc.clasificaciones.createProductCategory.mutate({
+      // Crear categorías de a una, ignorando duplicados silenciosamente
+      let firstId: string | null = null;
+      for (const name of selected) {
+        try {
+          const result = await trpc.clasificaciones.createProductCategory.mutate({
             accountId: accountId ?? "",
             name,
-          })
-        )
-      );
-      onNext((results[0] as any).id);
+          });
+          if (!firstId) firstId = (result as any).id;
+        } catch {
+          // Categoría ya existe — skip silencioso
+        }
+      }
+      // Si todas fallaron (todas duplicadas), buscar la primera existente
+      if (!firstId) {
+        const existing = await trpc.clasificaciones.listProductCategories.query({
+          accountId: accountId ?? "",
+        });
+        firstId = (existing as any[])[0]?.id ?? null;
+      }
+      onNext(firstId ?? "");
     } catch (e: any) {
       toast.error(e.message || "Error al crear categorías. Intentá de nuevo.");
       setLoading(false);
