@@ -52,3 +52,6 @@ dev-err.log
 
 # Windows Turbopack artifact
 nul
+
+# npm cache (local dev)
+/npm-cache
