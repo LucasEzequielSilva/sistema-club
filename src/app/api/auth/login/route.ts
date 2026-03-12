@@ -34,7 +34,15 @@ export async function POST(req: NextRequest) {
     }
 
     const token = await createSessionToken(user.accountId, email);
-    const res = NextResponse.json({ ok: true });
+
+    // Determinar si la cuenta ya completó el onboarding (tiene productos)
+    const productCount = await db.product.count({
+      where: { accountId: user.accountId, isActive: true },
+    });
+    const onboarded = productCount > 0;
+
+    // Devolver el redirect destino para que el frontend lo use
+    const res = NextResponse.json({ ok: true, redirect: onboarded ? "/tablero" : "/onboarding" });
     res.cookies.set(COOKIE_NAME, token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -43,12 +51,7 @@ export async function POST(req: NextRequest) {
       path: "/",
     });
 
-    // Si la cuenta ya tiene productos, marcar onboarding como completo automáticamente
-    // (evita que cuentas creadas via seed o migración caigan en el wizard)
-    const productCount = await db.product.count({
-      where: { accountId: user.accountId, isActive: true },
-    });
-    if (productCount > 0) {
+    if (onboarded) {
       const ONE_YEAR_S = 365 * 24 * 60 * 60;
       res.cookies.set("sc_onboarding_done", "1", {
         path: "/",

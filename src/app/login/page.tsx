@@ -34,7 +34,8 @@ function LoginForm() {
       });
 
       if (res.ok) {
-        router.push(from);
+        const data = await res.json();
+        router.push(data.redirect ?? from);
         router.refresh();
       } else {
         const data = await res.json();
