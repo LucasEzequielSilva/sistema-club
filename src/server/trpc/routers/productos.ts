@@ -217,7 +217,7 @@ export const productosRouter = router({
       });
       const currentStock =
         product.initialStock + (stockAgg._sum.quantity ?? 0);
-      const isLowStock = currentStock < product.minStock;
+      const isLowStock = currentStock <= product.minStock;
 
       // Calculate pricing for each price list
       const pricingByList = product.priceListItems.map((item) => ({
