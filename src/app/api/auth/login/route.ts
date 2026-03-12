@@ -43,6 +43,21 @@ export async function POST(req: NextRequest) {
       path: "/",
     });
 
+    // Si la cuenta ya tiene productos, marcar onboarding como completo automáticamente
+    // (evita que cuentas creadas via seed o migración caigan en el wizard)
+    const productCount = await db.product.count({
+      where: { accountId: user.accountId, isActive: true },
+    });
+    if (productCount > 0) {
+      const ONE_YEAR_S = 365 * 24 * 60 * 60;
+      res.cookies.set("sc_onboarding_done", "1", {
+        path: "/",
+        maxAge: ONE_YEAR_S,
+        sameSite: "lax",
+        httpOnly: true,
+      });
+    }
+
     return res;
   } catch {
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
