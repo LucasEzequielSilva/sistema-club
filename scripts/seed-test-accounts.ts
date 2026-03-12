@@ -174,6 +174,9 @@ async function createProduct(opts: {
   });
   if (existing) return existing;
 
+  // initialStock en el modelo del producto se deja en 0.
+  // El stock inicial real viene del stockMovement de tipo "initial".
+  // Así el cálculo del sistema (initialStock + SUM(movements)) es correcto.
   const product = await db.product.create({
     data: {
       accountId: opts.accountId,
@@ -184,7 +187,7 @@ async function createProduct(opts: {
       sku: opts.sku ?? null,
       unit: opts.unit,
       origin: opts.origin,
-      initialStock: opts.initialStock,
+      initialStock: 0,
       minStock: opts.minStock,
       acquisitionCost: opts.acquisitionCost,
       rawMaterialCost: opts.rawMaterialCost ?? 0,
