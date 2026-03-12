@@ -25,7 +25,6 @@ import {
   Loader2,
   Plus,
   X,
-  ShoppingBag,
 } from "lucide-react";
 import { useAccountId } from "@/hooks/use-account-id";
 
@@ -535,7 +534,7 @@ function StepProduct({
   onNext,
 }: {
   categoryId: string | null;
-  onNext: () => void;
+  onNext: (productId: string) => void;
 }) {
   const { accountId } = useAccountId();
   const [name, setName] = useState("");
@@ -550,7 +549,7 @@ function StepProduct({
     }
     setLoading(true);
     try {
-      await trpc.productos.create.mutate({
+      const product = await trpc.productos.create.mutate({
         accountId: accountId ?? "",
         name: name.trim(),
         categoryId,
@@ -563,7 +562,7 @@ function StepProduct({
         laborCost: 0,
         packagingCost: 0,
       });
-      onNext();
+      onNext((product as any).id);
     } catch (e: any) {
       toast.error(e.message || "Error al agregar producto");
       setLoading(false);
@@ -653,28 +652,52 @@ function StepPayments({ onNext }: { onNext: () => void }) {
     if (selected.length === 0) return;
     setLoading(true);
     try {
-      const existing = await trpc.clasificaciones.listPaymentMethods.query({
-        accountId: accountId ?? "",
-      });
-      const existingNames = (existing as any[]).map((m) =>
-        (m.name as string).toLowerCase()
-      );
+      const acId = accountId ?? "";
+
+      // 1. Métodos de pago seleccionados
+      const existing = await trpc.clasificaciones.listPaymentMethods.query({ accountId: acId });
+      const existingNames = (existing as any[]).map((m) => (m.name as string).toLowerCase());
       const toCreate = PAYMENT_OPTIONS.filter(
-        (o) =>
-          selected.includes(o.name) &&
-          !existingNames.includes(o.name.toLowerCase())
+        (o) => selected.includes(o.name) && !existingNames.includes(o.name.toLowerCase())
       );
       if (toCreate.length > 0) {
         await Promise.all(
           toCreate.map((o) =>
             trpc.clasificaciones.createPaymentMethod.mutate({
-              accountId: accountId ?? "",
+              accountId: acId,
               name: o.name,
               accreditationDays: o.days,
             })
           )
         );
       }
+
+      // 2. Clasificaciones de costo básicas (silencioso si ya existen)
+      const DEFAULT_COST_CATS = [
+        { name: "Costo de mercadería", costType: "variable" as const },
+        { name: "Materia prima",       costType: "variable" as const },
+        { name: "Flete",               costType: "variable" as const },
+        { name: "Alquiler",            costType: "fijo" as const },
+        { name: "Servicios",           costType: "fijo" as const },
+        { name: "Sueldos",             costType: "fijo" as const },
+        { name: "IVA",                 costType: "impuestos" as const },
+        { name: "Ingresos Brutos",     costType: "impuestos" as const },
+      ];
+      for (const cat of DEFAULT_COST_CATS) {
+        try {
+          await trpc.clasificaciones.createCostCategory.mutate({ accountId: acId, ...cat });
+        } catch { /* ya existe, ignorar */ }
+      }
+
+      // 3. Lista de precios Minorista (si no existe)
+      try {
+        await fetch("/api/price-lists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId: acId, name: "Minorista", isDefault: true }),
+        });
+      } catch { /* ya existe, ignorar */ }
+
       onNext();
     } catch (e: any) {
       toast.error(e.message || "Error al guardar métodos de pago");
@@ -757,11 +780,13 @@ function StepPayments({ onNext }: { onNext: () => void }) {
 
 // ── Step 5: ¡Listo! ───────────────────────────────────────────────────────────
 function StepDone({
+  productId,
+  onGoProduct,
   onGoTablero,
-  onGoPos,
 }: {
+  productId: string | null;
+  onGoProduct: () => void;
   onGoTablero: () => void;
-  onGoPos: () => void;
 }) {
   return (
     <>
@@ -786,9 +811,9 @@ function StepDone({
             ¡Todo listo! 🎉
           </h2>
           <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-            Tu negocio está configurado.
+            Ya tenés tu negocio configurado.
             <br />
-            ¡Hacé tu primera venta desde el Punto de Venta!
+            El próximo paso es <span className="font-semibold text-foreground">registrar tu stock</span> para poder vender.
           </p>
         </div>
 
@@ -810,14 +835,23 @@ function StepDone({
           ))}
         </div>
 
+        {/* Próximo paso destacado */}
+        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 text-left space-y-1">
+          <p className="text-xs font-bold uppercase tracking-wide text-primary/70">Próximo paso</p>
+          <p className="text-sm font-semibold text-foreground">Registrá tu stock inicial</p>
+          <p className="text-xs text-muted-foreground">
+            Andá a tu producto, hacé una compra o ingresá el stock directamente para empezar a vender.
+          </p>
+        </div>
+
         {/* CTAs */}
         <div className="space-y-2 pt-2">
           <Button
             className="w-full h-12 text-base font-semibold gap-2 shadow-md shadow-primary/20"
-            onClick={onGoPos}
+            onClick={onGoProduct}
           >
-            <ShoppingBag className="w-4 h-4" />
-            Ir al Punto de Venta
+            <Package className="w-4 h-4" />
+            Ver mi producto
           </Button>
           <Button variant="outline" className="w-full" onClick={onGoTablero}>
             Ver el tablero
@@ -834,10 +868,11 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [selectedRubro, setSelectedRubro] = useState<RubroId>("otro");
   const [createdCategoryId, setCreatedCategoryId] = useState<string | null>(null);
+  const [createdProductId, setCreatedProductId] = useState<string | null>(null);
 
   const advance = () => setStep((s) => s + 1);
 
-  const complete = async (destination: "/tablero" | "/pos") => {
+  const complete = async (destination: string) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("sc_progress_v1", "4");
     }
@@ -876,13 +911,22 @@ export default function OnboardingPage() {
       case 3:
         return <StepSupplier onNext={advance} />;
       case 4:
-        return <StepProduct categoryId={createdCategoryId} onNext={advance} />;
+        return (
+          <StepProduct
+            categoryId={createdCategoryId}
+            onNext={(productId) => {
+              setCreatedProductId(productId);
+              advance();
+            }}
+          />
+        );
       case 5:
         return <StepPayments onNext={advance} />;
       case 6:
         return (
           <StepDone
-            onGoPos={() => complete("/pos")}
+            productId={createdProductId}
+            onGoProduct={() => complete("/productos")}
             onGoTablero={() => complete("/tablero")}
           />
         );
