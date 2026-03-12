@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProductPricingTab } from "./product-pricing-tab";
 import { ProductStockTab } from "./product-stock-tab";
+import { ProductPurchasesTab } from "./product-purchases-tab";
 import { toast } from "sonner";
 
 interface ProductDetailProps {
@@ -210,6 +211,14 @@ export function ProductDetail({
           <TabsTrigger value="info">Información</TabsTrigger>
           <TabsTrigger value="pricing">Precio de Venta / Markup</TabsTrigger>
           <TabsTrigger value="stock">Stock</TabsTrigger>
+          <TabsTrigger value="purchases">
+            Historial de Compras
+            {product._count.purchases > 0 && (
+              <span className="ml-1.5 text-xs bg-muted text-muted-foreground rounded-full px-1.5 py-0.5">
+                {product._count.purchases}
+              </span>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         {/* Info Tab */}
@@ -316,6 +325,11 @@ export function ProductDetail({
         {/* Stock Tab */}
         <TabsContent value="stock" className="mt-4">
           <ProductStockTab product={product} />
+        </TabsContent>
+
+        {/* Purchases Tab */}
+        <TabsContent value="purchases" className="mt-4">
+          <ProductPurchasesTab productId={product.id} />
         </TabsContent>
       </Tabs>
     </div>

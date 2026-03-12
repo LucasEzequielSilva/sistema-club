@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PurchaseDialog } from "./components/purchase-dialog";
 import { PurchaseDetail } from "./components/purchase-detail";
+import { PurchaseInvoiceModal } from "./components/purchase-invoice-modal";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -124,6 +125,7 @@ export default function ComprasPage() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
 
   const [confirmDelete, ConfirmDialog] = useConfirm({
     title: "Eliminar compra",
@@ -438,7 +440,7 @@ export default function ComprasPage() {
                     <TableCell className="text-sm">
                       <div
                         className="cursor-pointer hover:underline"
-                        onClick={() => setDetailId(p.id)}
+                        onClick={() => setInvoiceModalId(p.id)}
                       >
                         {formatDate(p.invoiceDate)}
                       </div>
@@ -446,7 +448,7 @@ export default function ComprasPage() {
                     <TableCell>
                       <div
                         className="cursor-pointer hover:underline"
-                        onClick={() => setDetailId(p.id)}
+                        onClick={() => setInvoiceModalId(p.id)}
                       >
                         <span className="font-medium">{conceptLabel}</span>
                         <div className="text-xs text-muted-foreground">
@@ -486,7 +488,7 @@ export default function ComprasPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setDetailId(p.id)}>
+                          <DropdownMenuItem onClick={() => setInvoiceModalId(p.id)}>
                             Ver detalle
                           </DropdownMenuItem>
                           <DropdownMenuItem
@@ -527,6 +529,11 @@ export default function ComprasPage() {
         editingId={editingId}
       />
       {ConfirmDialog}
+
+      <PurchaseInvoiceModal
+        purchaseId={invoiceModalId}
+        onClose={() => setInvoiceModalId(null)}
+      />
     </div>
   );
 }

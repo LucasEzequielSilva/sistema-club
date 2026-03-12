@@ -7,11 +7,7 @@ import { Button } from "@/components/ui/button";
 import {
   Sparkles,
   X,
-  Mic,
-  MicOff,
   Send,
-  Volume2,
-  VolumeX,
   Loader2,
   Bot,
   RotateCcw,
@@ -188,13 +184,6 @@ const CONTEXTUAL_PROMPTS: Record<string, string[]> = {
 
 const DEFAULT_PROMPTS = ["¿Cómo arranco?", "¿Cómo registro una venta?", "¿Cómo vengo este mes?"];
 
-// Detecta soporte de Web Speech API
-const hasSpeechRecognition = () =>
-  typeof window !== "undefined" &&
-  ("SpeechRecognition" in window || "webkitSpeechRecognition" in window);
-
-const hasSpeechSynthesis = () =>
-  typeof window !== "undefined" && "speechSynthesis" in window;
 
 export function AIAssistant() {
   const pathname = usePathname();
@@ -204,8 +193,6 @@ export function AIAssistant() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [ttsEnabled, setTtsEnabled] = useState(true);
   const [noApiKey, setNoApiKey] = useState(false);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [memoriesLoading, setMemoriesLoading] = useState(false);
@@ -213,7 +200,6 @@ export function AIAssistant() {
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const currentPage = Object.entries(PAGE_LABELS).find(([path]) =>
@@ -243,27 +229,6 @@ export function AIAssistant() {
         setMessages([{ role: "assistant", content: WELCOME }]);
       }
     }
-  }, [open]);
-
-  // TTS: leer respuesta en voz
-  const speak = useCallback((text: string) => {
-    if (!hasSpeechSynthesis() || !ttsEnabled) return;
-    window.speechSynthesis.cancel();
-    const clean = text.replace(/\*\*/g, "").replace(/[#*`]/g, "");
-    const utt = new SpeechSynthesisUtterance(clean);
-    utt.lang = "es-AR";
-    utt.rate = 1.05;
-    utt.pitch = 1;
-    // Busca voz en español si está disponible
-    const voices = window.speechSynthesis.getVoices();
-    const esVoice = voices.find((v) => v.lang.startsWith("es"));
-    if (esVoice) utt.voice = esVoice;
-    window.speechSynthesis.speak(utt);
-  }, [ttsEnabled]);
-
-  // Parar TTS al cerrar
-  useEffect(() => {
-    if (!open && hasSpeechSynthesis()) window.speechSynthesis.cancel();
   }, [open]);
 
   // ── Memorias ──────────────────────────────────────────────────────────────
@@ -416,8 +381,6 @@ export function AIAssistant() {
             return updated;
           });
         }
-      } else {
-        if (fullText) speak(fullText);
       }
 
       // Refrescar memorias en background (puede que se hayan extraído nuevas)
@@ -432,41 +395,10 @@ export function AIAssistant() {
     } finally {
       setLoading(false);
     }
-  }, [messages, loading, currentPage, speak, fetchMemories]);
-
-  // Voice input
-  const toggleListening = useCallback(() => {
-    if (!hasSpeechRecognition()) return;
-
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-      return;
-    }
-
-    const SpeechRec =
-      (window as any).SpeechRecognition ||
-      (window as any).webkitSpeechRecognition;
-    const rec: SpeechRecognition = new SpeechRec();
-    rec.lang = "es-AR";
-    rec.continuous = false;
-    rec.interimResults = false;
-
-    rec.onstart = () => setListening(true);
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    rec.onresult = (e: SpeechRecognitionEvent) => {
-      const transcript = e.results[0][0].transcript;
-      sendMessage(transcript);
-    };
-
-    recognitionRef.current = rec;
-    rec.start();
-  }, [listening, sendMessage]);
+  }, [messages, loading, currentPage, fetchMemories]);
 
   const resetChat = () => {
     abortRef.current?.abort();
-    window.speechSynthesis?.cancel();
     setMessages([{ role: "assistant", content: WELCOME }]);
     setInput("");
     setLoading(false);
@@ -565,20 +497,6 @@ export function AIAssistant() {
             <div className="w-px h-4 bg-white/20 mx-0.5" />
             {activeTab === "chat" ? (
               <>
-                <button
-                  onClick={() => {
-                    setTtsEnabled((v) => !v);
-                    if (hasSpeechSynthesis()) window.speechSynthesis.cancel();
-                  }}
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-                  title={ttsEnabled ? "Silenciar voz" : "Activar voz"}
-                >
-                  {ttsEnabled ? (
-                    <Volume2 className="w-3.5 h-3.5 opacity-80" />
-                  ) : (
-                    <VolumeX className="w-3.5 h-3.5 opacity-40" />
-                  )}
-                </button>
                 <button
                   onClick={resetChat}
                   className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
@@ -685,25 +603,6 @@ export function AIAssistant() {
 
             {/* Input */}
             <div className="p-3 border-t border-border flex items-center gap-2">
-              {hasSpeechRecognition() && (
-                <button
-                  onClick={toggleListening}
-                  className={cn(
-                    "flex items-center justify-center w-8 h-8 rounded-full transition-all shrink-0",
-                    listening
-                      ? "bg-red-500 text-white animate-pulse"
-                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  )}
-                  title={listening ? "Parar de escuchar" : "Hablar"}
-                >
-                  {listening ? (
-                    <MicOff className="w-3.5 h-3.5" />
-                  ) : (
-                    <Mic className="w-3.5 h-3.5" />
-                  )}
-                </button>
-              )}
-
               <input
                 ref={inputRef}
                 value={input}
@@ -714,8 +613,8 @@ export function AIAssistant() {
                     sendMessage(input);
                   }
                 }}
-                placeholder={listening ? "Escuchando..." : "Preguntá algo..."}
-                disabled={loading || listening}
+                placeholder="Preguntá algo..."
+                disabled={loading}
                 className="flex-1 bg-muted rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary transition-all placeholder:text-muted-foreground disabled:opacity-50"
               />
 

@@ -99,7 +99,7 @@ export default function TableroPage() {
   const [preset, setPreset] = useState<PeriodPreset>("today");
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
-  const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
 
   // ── Meta mensual ──
   const [salesGoal, setSalesGoal] = useState<number>(() => {
@@ -290,23 +290,37 @@ export default function TableroPage() {
         <SetupChecklist hasSales={false} />
       ) : (
         <>
-          {/* Proactive alerts strip */}
-          {data.kpis?.lowStockCount > 0 && !dismissedAlerts.includes("lowstock") && (
-            <div className="flex items-center gap-3 py-2.5 px-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-              <span className="flex-1">
-                <strong>{data.kpis.lowStockCount}</strong>{" "}
-                {data.kpis.lowStockCount === 1 ? "producto bajo stock mínimo" : "productos bajo stock mínimo"}.{" "}
-                <button onClick={() => router.push("/mercaderia")} className="underline font-medium hover:text-amber-900">
-                  Ver mercadería
+          {/* Alerta de stock bajo — banner destacado */}
+          {data.lowStockProducts?.length > 0 && (
+            <div className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3.5 text-sm">
+              <div className="flex items-start gap-3">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-red-100 border border-red-200 shrink-0 mt-0.5">
+                  <AlertTriangle className="w-4 h-4 text-red-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-red-800 text-base">
+                    {data.lowStockProducts.length === 1
+                      ? "1 producto con stock crítico"
+                      : `${data.lowStockProducts.length} productos con stock crítico`}
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+                    {data.lowStockProducts.map((p: any) => (
+                      <span key={p.id} className="text-red-700 font-medium">
+                        • {p.name}
+                        <span className="text-red-500 font-normal ml-1">
+                          (stock: {p.currentStock} / mín: {p.minStock})
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  onClick={() => router.push("/mercaderia")}
+                  className="shrink-0 text-xs font-semibold text-red-700 border border-red-300 bg-white hover:bg-red-50 rounded-lg px-3 py-1.5 transition-colors whitespace-nowrap"
+                >
+                  Ver Mercadería →
                 </button>
-              </span>
-              <button
-                onClick={() => setDismissedAlerts((d) => [...d, "lowstock"])}
-                className="text-amber-600 hover:text-amber-900 transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              </div>
             </div>
           )}
 
