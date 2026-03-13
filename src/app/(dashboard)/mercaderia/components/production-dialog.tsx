@@ -43,10 +43,17 @@ type FormState = {
   notes: string;
 };
 
+function formatLocalDateInput(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 const EMPTY: FormState = {
   productId: "",
   quantity: "1",
-  movementDate: new Date().toISOString().split("T")[0],
+  movementDate: formatLocalDateInput(new Date()),
   notes: "",
 };
 
@@ -91,6 +98,7 @@ export function ProductionDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
 
     if (!form.productId) {
       toast.error("Seleccioná un producto");

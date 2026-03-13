@@ -66,6 +66,20 @@ type Header = {
   notes: string;
 };
 
+function formatLocalDateInput(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDateInput(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T12:00:00`);
+  }
+  return new Date(value);
+}
+
 const EMPTY_ITEM: PurchaseItem = {
   productId: "",
   description: "",
@@ -80,7 +94,7 @@ const EMPTY_ITEM: PurchaseItem = {
 
 const EMPTY_HEADER: Header = {
   supplierId: "",
-  invoiceDate: new Date().toISOString().split("T")[0],
+  invoiceDate: formatLocalDateInput(new Date()),
   invoiceNumber: "",
   dueDate: "",
   notes: "",
@@ -409,9 +423,9 @@ export function PurchaseDialog({
         .then((p: any) => {
           setHeader({
             supplierId: p.supplierId ?? "",
-            invoiceDate: new Date(p.invoiceDate).toISOString().split("T")[0],
+            invoiceDate: formatLocalDateInput(new Date(p.invoiceDate)),
             invoiceNumber: p.invoiceNumber ?? "",
-            dueDate: p.dueDate ? new Date(p.dueDate).toISOString().split("T")[0] : "",
+            dueDate: p.dueDate ? formatLocalDateInput(new Date(p.dueDate)) : "",
             notes: p.notes ?? "",
           });
           setItems([{
@@ -470,6 +484,7 @@ export function PurchaseDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
 
     // Validaciones
     for (let i = 0; i < items.length; i++) {
@@ -494,14 +509,14 @@ export function PurchaseDialog({
           id: editingId,
           supplierId: header.supplierId || null,
           costCategoryId: it.costCategoryId,
-          invoiceDate: new Date(header.invoiceDate),
+          invoiceDate: parseLocalDateInput(header.invoiceDate),
           description: it.description || null,
           unitCost: parseFloat(it.unitCost) || 0,
           quantity: parseFloat(it.quantity) || 0,
           discountPct: parseFloat(it.discountPct) || 0,
           ivaAmount,
           invoiceNumber: header.invoiceNumber || null,
-          dueDate: header.dueDate ? new Date(header.dueDate) : null,
+          dueDate: header.dueDate ? parseLocalDateInput(header.dueDate) : null,
           notes: header.notes || null,
         });
         toast.success("Compra actualizada");
@@ -512,7 +527,7 @@ export function PurchaseDialog({
           .map((p) => ({
             paymentMethodId: p.paymentMethodId,
             amount: parseFloat(p.amount),
-            paymentDate: new Date(p.paymentDate),
+            paymentDate: parseLocalDateInput(p.paymentDate),
           }));
 
         for (let i = 0; i < items.length; i++) {
@@ -525,14 +540,14 @@ export function PurchaseDialog({
             supplierId: header.supplierId || null,
             productId: it.productId || null,
             costCategoryId: it.costCategoryId,
-            invoiceDate: new Date(header.invoiceDate),
+            invoiceDate: parseLocalDateInput(header.invoiceDate),
             description: it.description || undefined,
             unitCost,
             quantity: parseFloat(it.quantity) || 0,
             discountPct: parseFloat(it.discountPct) || 0,
             ivaAmount,
             invoiceNumber: header.invoiceNumber || undefined,
-            dueDate: header.dueDate ? new Date(header.dueDate) : null,
+            dueDate: header.dueDate ? parseLocalDateInput(header.dueDate) : null,
             notes: header.notes || undefined,
             // Los pagos van solo en el primer ítem
             payments: i === 0 ? validPayments : [],

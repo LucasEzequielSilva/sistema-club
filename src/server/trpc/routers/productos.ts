@@ -63,6 +63,34 @@ function calcPricing(
   };
 }
 
+function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesProductSearch(
+  product: { name: string; sku?: string | null; barcode?: string | null; category?: { name: string }; supplier?: { name: string } },
+  rawSearch: string
+): boolean {
+  const query = normalizeSearchText(rawSearch);
+  if (!query) return true;
+  const tokens = query.split(/\s+/).filter(Boolean);
+  const haystack = normalizeSearchText(
+    [
+      product.name,
+      product.sku ?? "",
+      product.barcode ?? "",
+      product.category?.name ?? "",
+      product.supplier?.name ?? "",
+    ].join(" ")
+  );
+
+  return tokens.every((t) => haystack.includes(t));
+}
+
 // ============================================================
 // Router
 // ============================================================
@@ -97,7 +125,7 @@ export const productosRouter = router({
         where: {
           accountId: input.accountId,
           ...(input.isActive !== undefined && { isActive: input.isActive }),
-          ...(input.search && { name: { contains: input.search } }),
+          ...(input.search && { name: { contains: input.search, mode: "insensitive" } }),
           ...(input.categoryId && { categoryId: input.categoryId }),
           ...(input.supplierId && { supplierId: input.supplierId }),
         },
@@ -153,7 +181,13 @@ export const productosRouter = router({
 
       // Apply low stock filter after computation
       if (input.lowStockOnly) {
-        return enriched.filter((p) => p.isLowStock);
+        return enriched
+          .filter((p) => p.isLowStock)
+          .filter((p) => !input.search || matchesProductSearch(p, input.search));
+      }
+
+      if (input.search) {
+        return enriched.filter((p) => matchesProductSearch(p, input.search));
       }
 
       return enriched;

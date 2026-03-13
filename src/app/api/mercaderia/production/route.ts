@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
 
+function parseLocalDateInput(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    // Evita corrimiento por timezone al parsear fecha sin hora
+    return new Date(`${value}T12:00:00`);
+  }
+  return new Date(value);
+}
+
 async function getAccountId(req: NextRequest): Promise<string | null> {
   const token = req.cookies.get(COOKIE_NAME)?.value;
   if (!token) return null;
@@ -60,7 +68,7 @@ export async function POST(req: NextRequest) {
       quantity,
       unitCost: unitCost > 0 ? unitCost : null,
       referenceType: "production",
-      movementDate: new Date(movementDate),
+      movementDate: parseLocalDateInput(movementDate),
       notes: notes || null,
     },
   });
