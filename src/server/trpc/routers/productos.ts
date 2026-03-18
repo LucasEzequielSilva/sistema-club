@@ -72,7 +72,13 @@ function normalizeSearchText(value: string): string {
 }
 
 function matchesProductSearch(
-  product: { name: string; sku?: string | null; barcode?: string | null; category?: { name: string }; supplier?: { name: string } },
+  product: {
+    name: string;
+    sku?: string | null;
+    barcode?: string | null;
+    category?: { name: string } | null;
+    supplier?: { name: string } | null;
+  },
   rawSearch: string
 ): boolean {
   const query = normalizeSearchText(rawSearch);
@@ -179,15 +185,17 @@ export const productosRouter = router({
         };
       });
 
+      const searchValue = input.search ?? "";
+
       // Apply low stock filter after computation
       if (input.lowStockOnly) {
         return enriched
           .filter((p) => p.isLowStock)
-          .filter((p) => !input.search || matchesProductSearch(p, input.search));
+          .filter((p) => !searchValue || matchesProductSearch(p, searchValue));
       }
 
-      if (input.search) {
-        return enriched.filter((p) => matchesProductSearch(p, input.search));
+      if (searchValue) {
+        return enriched.filter((p) => matchesProductSearch(p, searchValue));
       }
 
       return enriched;

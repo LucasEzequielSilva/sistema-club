@@ -64,6 +64,10 @@ const EMPTY: FormState = {
 
 type Category = { id: string; name: string };
 type Supplier = { id: string; name: string };
+type AccountConfig = {
+  taxStatus: "monotributista" | "responsable_inscripto";
+  ivaRate: number;
+};
 
 export function ProductDialog({
   open,
@@ -80,6 +84,8 @@ export function ProductDialog({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [priceListName, setPriceListName] = useState<string | null>(null);
   const [currentStock, setCurrentStock] = useState<number | null>(null);
+  const [accountConfig, setAccountConfig] = useState<AccountConfig | null>(null);
+  const [saleIvaRate, setSaleIvaRate] = useState(21);
 
   // Load categories + suppliers
   useEffect(() => {
@@ -97,6 +103,20 @@ export function ProductDialog({
       .then((sups) =>
         setSuppliers(sups.map((s) => ({ id: s.id, name: s.name })))
       )
+      .catch(() => {});
+
+    fetch("/api/account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((acc) => {
+        if (acc?.taxStatus) {
+          const cfg: AccountConfig = {
+            taxStatus: acc.taxStatus,
+            ivaRate: Number(acc.ivaRate ?? 21),
+          };
+          setAccountConfig(cfg);
+          setSaleIvaRate(cfg.ivaRate || 21);
+        }
+      })
       .catch(() => {});
   }, [open, accountId]);
 
@@ -279,6 +299,16 @@ export function ProductDialog({
       setLoading(false);
     }
   };
+
+  const cost = parseFloat(form.unitCost) || 0;
+  const markupPct = parseFloat(form.markup) || 0;
+  const salePrice = parseFloat(form.salePrice) || 0;
+  const contributionMargin = salePrice - cost;
+  const marginPct = salePrice > 0 ? (contributionMargin / salePrice) * 100 : 0;
+  const salePriceWithIva =
+    accountConfig?.taxStatus === "responsable_inscripto"
+      ? salePrice * (1 + saleIvaRate / 100)
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -494,6 +524,49 @@ export function ProductDialog({
                   ? `Se guarda en la lista "${priceListName}"`
                   : 'Si completás el precio, se creará automáticamente la lista "Lista General"'}
               </p>
+
+              {accountConfig?.taxStatus === "responsable_inscripto" && (
+                <div className="grid grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <Label>IVA para PV público</Label>
+                    <Select
+                      value={String(saleIvaRate)}
+                      onValueChange={(v) => setSaleIvaRate(parseFloat(v) || 21)}
+                    >
+                      <SelectTrigger className="w-full bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="21">21%</SelectItem>
+                        <SelectItem value="10.5">10.5%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Precio de venta + IVA</Label>
+                    <div className="h-9 px-3 rounded-md border border-input bg-background flex items-center font-mono text-sm">
+                      {salePriceWithIva !== null
+                        ? `$ ${salePriceWithIva.toFixed(2)}`
+                        : "—"}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3 pt-1">
+                <div className="rounded-md border border-border bg-background p-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">MKUP</p>
+                  <p className="text-sm font-mono font-semibold text-foreground">{markupPct.toFixed(2)}%</p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">CMG</p>
+                  <p className="text-sm font-mono font-semibold text-foreground">$ {contributionMargin.toFixed(2)}</p>
+                </div>
+                <div className="rounded-md border border-border bg-background p-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Margen contrib.</p>
+                  <p className="text-sm font-mono font-semibold text-foreground">{marginPct.toFixed(2)}%</p>
+                </div>
+              </div>
             </div>
 
             {/* Stock */}

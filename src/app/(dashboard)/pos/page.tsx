@@ -25,6 +25,7 @@ import {
   TrendingUp,
   Package,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { useAccountId } from "@/hooks/use-account-id";
 
@@ -68,6 +69,19 @@ type LastSale = {
   paymentMethodName: string;
 };
 
+type CartItem = {
+  id: string;
+  product: Product;
+  pricing: PricingInfo;
+  quantity: number;
+  discountPct: number;
+  unitPrice: number;
+  subtotal: number;
+  variableCostTotal: number;
+  contributionMargin: number;
+  marginPct: number;
+};
+
 // ============================================================
 // Helpers
 // ============================================================
@@ -88,6 +102,24 @@ function formatDate(d: Date) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesSearch(product: Product, rawSearch: string): boolean {
+  const query = normalizeText(rawSearch);
+  if (!query) return true;
+  const tokens = query.split(/\s+/).filter(Boolean);
+  const haystack = normalizeText(
+    [product.name, product.barcode ?? "", product.sku ?? "", product.category?.name ?? ""].join(" ")
+  );
+  return tokens.every((t) => haystack.includes(t));
 }
 
 // ============================================================
@@ -118,6 +150,7 @@ export default function PosPage() {
   const [discountPct, setDiscountPct] = useState("0");
   const [paymentMethodId, setPaymentMethodId] = useState("");
   const [origin, setOrigin] = useState<"minorista" | "mayorista">("minorista");
+  const [cart, setCart] = useState<CartItem[]>([]);
 
   // ── State ──
   const [submitting, setSubmitting] = useState(false);
@@ -202,20 +235,15 @@ export default function PosPage() {
     }
 
     const timer = setTimeout(() => {
-      const term = searchTerm.toLowerCase().trim();
-      const results = products.filter(
-        (p) =>
-          p.name.toLowerCase().includes(term) ||
-          (p.barcode && p.barcode.toLowerCase().includes(term)) ||
-          (p.sku && p.sku.toLowerCase().includes(term))
-      );
+      const term = normalizeText(searchTerm);
+      const results = products.filter((p) => matchesSearch(p, term));
 
       // Auto-select si hay match EXACTO de código de barras o SKU
       // (el lector escanea → tipea el código completo → auto-selecciona sin Enter)
       const exactMatch = results.find(
         (p) =>
-          p.barcode?.toLowerCase() === term ||
-          p.sku?.toLowerCase() === term
+          normalizeText(p.barcode ?? "") === term ||
+          normalizeText(p.sku ?? "") === term
       );
       if (exactMatch) {
         selectProduct(exactMatch);
@@ -291,13 +319,8 @@ export default function PosPage() {
 
       // 3. Debounce aún en vuelo (scanner muy rápido) → correr búsqueda sincrónicamente
       if (searchTerm.trim()) {
-        const term = searchTerm.toLowerCase().trim();
-        const results = products.filter(
-          (p) =>
-            p.name.toLowerCase().includes(term) ||
-            (p.barcode && p.barcode.toLowerCase().includes(term)) ||
-            (p.sku && p.sku.toLowerCase().includes(term))
-        );
+        const term = normalizeText(searchTerm);
+        const results = products.filter((p) => matchesSearch(p, term));
         if (results.length === 1) {
           selectProduct(results[0]);
         } else if (results.length > 1) {
@@ -337,6 +360,11 @@ export default function PosPage() {
   const contributionMargin = subtotal - variableCostTotal;
   const marginPct = subtotal > 0 ? (contributionMargin / subtotal) * 100 : 0;
 
+  const cartTotal = cart.reduce((sum, it) => sum + it.subtotal, 0);
+  const cartCostTotal = cart.reduce((sum, it) => sum + it.variableCostTotal, 0);
+  const cartContribution = cart.reduce((sum, it) => sum + it.contributionMargin, 0);
+  const cartMarginPct = cartTotal > 0 ? (cartContribution / cartTotal) * 100 : 0;
+
   // ── Reset form ──
   const resetForm = useCallback(() => {
     setSelectedProduct(null);
@@ -344,24 +372,58 @@ export default function PosPage() {
     setPricing(null);
     setQuantity("1");
     setDiscountPct("0");
+    setCart([]);
     setLastSale(null);
 
     // Focus back to search
     setTimeout(() => searchInputRef.current?.focus(), 100);
   }, []);
 
-  // ── Submit sale ──
-  const handleConfirm = useCallback(async () => {
-    if (!selectedProduct) {
-      toast.error("Selecciona un producto");
-      return;
-    }
-    if (!pricing) {
-      toast.error("Esperando precio del producto");
+  const addCurrentToCart = useCallback(() => {
+    if (!selectedProduct || !pricing) {
+      toast.error("Seleccioná un producto");
       return;
     }
     if (qty <= 0) {
       toast.error("La cantidad debe ser mayor a 0");
+      return;
+    }
+
+    const newItem: CartItem = {
+      id: `${selectedProduct.id}-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+      product: selectedProduct,
+      pricing,
+      quantity: qty,
+      discountPct: discount,
+      unitPrice,
+      subtotal,
+      variableCostTotal,
+      contributionMargin,
+      marginPct,
+    };
+
+    setCart((prev) => [...prev, newItem]);
+    setRecentProducts((prev) => {
+      const soldProduct = { id: selectedProduct.id, name: selectedProduct.name };
+      const filtered = prev.filter((p) => p.id !== soldProduct.id);
+      return [soldProduct, ...filtered].slice(0, 5);
+    });
+
+    setSelectedProduct(null);
+    setSearchTerm("");
+    setPricing(null);
+    setQuantity("1");
+    setDiscountPct("0");
+    setShowDropdown(false);
+    setHighlightedIndex(-1);
+    setTimeout(() => searchInputRef.current?.focus(), 50);
+    toast.success("Artículo agregado al carrito");
+  }, [selectedProduct, pricing, qty, discount, unitPrice, subtotal, variableCostTotal, contributionMargin, marginPct]);
+
+  // ── Submit sale ──
+  const handleConfirm = useCallback(async () => {
+    if (cart.length === 0) {
+      toast.error("Agregá al menos un artículo al carrito");
       return;
     }
     if (!paymentMethodId) {
@@ -371,73 +433,90 @@ export default function PosPage() {
 
     setSubmitting(true);
     try {
-      const sale = await trpc.ventas.create.mutate({
-        accountId: accountId ?? "",
-        productId: selectedProduct.id,
-        categoryId: pricing.categoryId,
-        priceListId: selectedPriceListId || null,
-        saleDate: new Date(),
-        origin,
-        unitPrice,
-        quantity: qty,
-        discountPct: discount,
-        invoiced: false,
-        payments: [
-          {
-            paymentMethodId,
-            amount: subtotal,
-            paymentDate: new Date(),
-          },
-        ],
-      });
+      let firstSale: any = null;
+
+      for (let i = 0; i < cart.length; i++) {
+        const item = cart[i];
+        const sale = await trpc.ventas.create.mutate({
+          accountId: accountId ?? "",
+          productId: item.product.id,
+          categoryId: item.pricing.categoryId,
+          priceListId: selectedPriceListId || null,
+          saleDate: new Date(),
+          origin,
+          unitPrice: item.unitPrice,
+          quantity: item.quantity,
+          discountPct: item.discountPct,
+          invoiced: false,
+          payments: [
+            {
+              paymentMethodId,
+              amount: item.subtotal,
+              paymentDate: new Date(),
+            },
+          ],
+        });
+
+        if (!firstSale) firstSale = sale;
+      }
 
       const methodName =
         paymentMethods.find((m) => m.id === paymentMethodId)?.name ?? "";
 
+      const totalSaleAmount = cart.reduce((sum, it) => sum + it.subtotal, 0);
+      const firstItem = cart[0];
+
       setLastSale({
-        id: sale.id,
-        productName: selectedProduct.name,
-        quantity: qty,
-        unitPrice,
-        total: subtotal,
+        id: firstSale?.id ?? "",
+        productName:
+          cart.length === 1
+            ? firstItem.product.name
+            : `${firstItem.product.name} + ${cart.length - 1} ítem(s)`,
+        quantity: firstItem.quantity,
+        unitPrice: firstItem.unitPrice,
+        total: totalSaleAmount,
         paymentMethodName: methodName,
       });
 
       setSalesCount((prev) => prev + 1);
-      setSalesTotalToday((prev) => prev + subtotal);
+      setSalesTotalToday((prev) => prev + totalSaleAmount);
 
       // Track recent products (max 5, LIFO, no duplicates)
-      const soldProduct = { id: selectedProduct.id, name: selectedProduct.name };
       setRecentProducts((prev) => {
-        const filtered = prev.filter((p) => p.id !== soldProduct.id);
-        return [soldProduct, ...filtered].slice(0, 5);
+        const next = [...prev];
+        for (const it of cart) {
+          const rp = { id: it.product.id, name: it.product.name };
+          const filtered = next.filter((p) => p.id !== rp.id);
+          next.splice(0, next.length, ...[rp, ...filtered].slice(0, 5));
+        }
+        return next.slice(0, 5);
       });
 
       // Save last sale config for "Repetir venta"
       setLastSaleConfig({
-        productId: selectedProduct.id,
-        quantity: String(qty),
+        productId: firstItem.product.id,
+        quantity: String(firstItem.quantity),
         paymentMethodId,
-        discountPct,
+        discountPct: String(firstItem.discountPct),
       });
 
       // Update stock in local products list
       setProducts((prev) =>
-        prev.map((p) =>
-          p.id === selectedProduct.id
-            ? { ...p, currentStock: p.currentStock - qty }
-            : p
-        )
+        prev.map((p) => {
+          const soldQty = cart
+            .filter((it) => it.product.id === p.id)
+            .reduce((sum, it) => sum + it.quantity, 0);
+          return soldQty > 0 ? { ...p, currentStock: p.currentStock - soldQty } : p;
+        })
       );
 
-      const stockRestante = selectedProduct.currentStock - qty;
       const metodoPago =
         paymentMethods.find((m) => m.id === paymentMethodId)?.name ?? "";
 
       toast.success(
-        `${selectedProduct.name} · ${formatCurrency(subtotal)}`,
+        `Venta registrada · ${formatCurrency(totalSaleAmount)}`,
         {
-          description: `${qty} ${selectedProduct.unit} · ${metodoPago} · Stock restante: ${stockRestante} ${selectedProduct.unit}`,
+          description: `${cart.length} artículo(s) · ${metodoPago}`,
           duration: 4000,
         }
       );
@@ -446,7 +525,7 @@ export default function PosPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [selectedProduct, pricing, qty, discount, paymentMethodId, selectedPriceListId, origin, unitPrice, subtotal, paymentMethods]);
+  }, [cart, paymentMethodId, selectedPriceListId, origin, paymentMethods]);
 
   // ── Ctrl+Enter shortcut to confirm sale ──
   useEffect(() => {
@@ -909,9 +988,12 @@ export default function PosPage() {
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        setQuantity((prev) =>
-                          String(Math.max(1, (parseFloat(prev) || 0) - 1))
-                        )
+                        setQuantity((prev) => {
+                          const current = parseFloat(prev) || 0;
+                          const step = selectedProduct.unit === "unidad" ? 1 : 0.1;
+                          const min = selectedProduct.unit === "unidad" ? 1 : 0.1;
+                          return String(Math.max(min, current - step));
+                        })
                       }
                       className="h-11 w-11 text-base shrink-0 bg-background"
                     >
@@ -920,8 +1002,8 @@ export default function PosPage() {
                     <Input
                       id="pos-qty"
                       type="number"
-                      step="1"
-                      min="0.01"
+                      step={selectedProduct.unit === "unidad" ? "1" : "0.1"}
+                      min={selectedProduct.unit === "unidad" ? "1" : "0.1"}
                       value={quantity}
                       onChange={(e) => setQuantity(e.target.value)}
                       className="text-center text-xl font-mono h-11 bg-background"
@@ -931,9 +1013,11 @@ export default function PosPage() {
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        setQuantity((prev) =>
-                          String((parseFloat(prev) || 0) + 1)
-                        )
+                        setQuantity((prev) => {
+                          const current = parseFloat(prev) || 0;
+                          const step = selectedProduct.unit === "unidad" ? 1 : 0.1;
+                          return String(current + step);
+                        })
                       }
                       className="h-11 w-11 text-base shrink-0 bg-background"
                     >
@@ -959,6 +1043,18 @@ export default function PosPage() {
               </div>
             )}
 
+            {selectedProduct && pricing && (
+              <Button
+                className="w-full h-11"
+                variant="secondary"
+                onClick={addCurrentToCart}
+                disabled={qty <= 0}
+              >
+                Agregar al carrito
+                <span className="ml-2 font-mono">{formatCurrency(subtotal)}</span>
+              </Button>
+            )}
+
             {/* Placeholder when no product selected */}
             {!selectedProduct && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -975,28 +1071,33 @@ export default function PosPage() {
             <div className="p-5 space-y-4 flex-1 overflow-y-auto">
               <h2 className="font-bold text-sm uppercase tracking-wide text-muted-foreground">Resumen</h2>
 
-              {selectedProduct && pricing ? (
+              {cart.length > 0 ? (
                 <div className="space-y-3">
-                  {/* Main totals */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Precio unitario</span>
-                      <span className="font-mono">
-                        {formatCurrency(unitPrice)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Cantidad</span>
-                      <span className="font-mono">{qty}</span>
-                    </div>
-                    {discount > 0 && (
-                      <div className="flex justify-between text-sm text-orange-600">
-                        <span>Descuento ({discount}%)</span>
-                        <span className="font-mono">
-                          -{formatCurrency(unitPrice * qty * (discount / 100))}
-                        </span>
+                  {/* Items */}
+                  <div className="space-y-2 max-h-[260px] overflow-auto pr-1">
+                    {cart.map((it) => (
+                      <div key={it.id} className="rounded-lg border border-border p-2.5 bg-muted/30">
+                        <div className="flex justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{it.product.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {it.quantity} x {formatCurrency(it.unitPrice)}
+                              {it.discountPct > 0 ? ` · desc ${it.discountPct}%` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="font-mono text-sm font-semibold">{formatCurrency(it.subtotal)}</p>
+                            <button
+                              type="button"
+                              className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
+                              onClick={() => setCart((prev) => prev.filter((x) => x.id !== it.id))}
+                            >
+                              <Trash2 className="w-3 h-3" /> Quitar
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    )}
+                    ))}
                   </div>
 
                   {/* Total highlight */}
@@ -1004,7 +1105,7 @@ export default function PosPage() {
                     <div className="flex justify-between items-baseline">
                       <span className="text-sm font-medium text-muted-foreground">Total</span>
                       <span className="text-3xl font-bold text-foreground font-mono">
-                        {formatCurrency(subtotal)}
+                        {formatCurrency(cartTotal)}
                       </span>
                     </div>
                   </div>
@@ -1018,42 +1119,24 @@ export default function PosPage() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Costo variable</span>
                       <span className="font-mono text-sm">
-                        {formatCurrency(variableCostTotal)}
+                        {formatCurrency(cartCostTotal)}
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Margen contrib.</span>
                       <span
                         className={`font-mono font-medium text-sm ${
-                          marginPct < 20
+                          cartMarginPct < 20
                             ? "text-red-500"
-                            : marginPct < 30
+                            : cartMarginPct < 30
                               ? "text-amber-500"
                               : "text-green-600"
                         }`}
                       >
-                        {formatCurrency(contributionMargin)} ({marginPct.toFixed(1)}%)
+                        {formatCurrency(cartContribution)} ({cartMarginPct.toFixed(1)}%)
                       </span>
                     </div>
                   </div>
-
-                  {/* Stock warnings */}
-                  {selectedProduct.currentStock - qty < 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
-                      <strong>Atención:</strong> El stock quedará negativo (
-                      {selectedProduct.currentStock - qty}{" "}
-                      {selectedProduct.unit}).
-                    </div>
-                  )}
-                  {selectedProduct.currentStock - qty >= 0 &&
-                    selectedProduct.currentStock - qty <
-                      selectedProduct.currentStock * 0.2 && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">
-                        Stock bajo después de esta venta:{" "}
-                        {selectedProduct.currentStock - qty}{" "}
-                        {selectedProduct.unit} restantes.
-                      </div>
-                    )}
 
                   {/* Payment method */}
                   <div className="space-y-1.5">
@@ -1083,7 +1166,7 @@ export default function PosPage() {
               ) : (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-sm py-12 text-center gap-2">
                   <ShoppingBag className="w-8 h-8 text-muted-foreground/40" />
-                  <span>Seleccioná un producto para comenzar</span>
+                  <span>Agregá productos al carrito para confirmar la venta</span>
                 </div>
               )}
             </div>
@@ -1092,7 +1175,7 @@ export default function PosPage() {
             <div className="p-4 border-t border-border">
               <Button
                 className="w-full h-12 text-base font-semibold"
-                disabled={!selectedProduct || !pricing || qty <= 0 || submitting}
+                disabled={cart.length === 0 || submitting}
                 onClick={handleConfirm}
               >
                 {submitting ? (
@@ -1101,9 +1184,9 @@ export default function PosPage() {
                   <>
                     <ShoppingBag className="w-5 h-5 mr-2" />
                     Confirmar Venta
-                    {selectedProduct && pricing && qty > 0 && (
+                    {cart.length > 0 && (
                       <span className="ml-2 opacity-75 text-sm font-normal">
-                        {formatCurrency(subtotal)}
+                        {formatCurrency(cartTotal)}
                       </span>
                     )}
                   </>
@@ -1122,4 +1205,3 @@ export default function PosPage() {
     </div>
   );
 }
-

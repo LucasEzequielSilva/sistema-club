@@ -224,6 +224,17 @@ export default function VentasPage() {
 
   const hasFilters = statusFilter !== "all" || dateFrom || dateTo;
 
+  const totalFacturadoMonto = sales
+    .filter((s) => s.invoiced)
+    .reduce((sum, s) => sum + s.total, 0);
+  const totalNoFacturadoMonto = sales
+    .filter((s) => !s.invoiced)
+    .reduce((sum, s) => sum + s.total, 0);
+  const totalMontoVentas = totalFacturadoMonto + totalNoFacturadoMonto;
+  const pctFacturado = totalMontoVentas > 0 ? (totalFacturadoMonto / totalMontoVentas) * 100 : 0;
+  const pctNoFacturado = totalMontoVentas > 0 ? (totalNoFacturadoMonto / totalMontoVentas) * 100 : 0;
+  const avgMcPct = sales.length > 0 ? sales.reduce((sum, s) => sum + s.marginPct, 0) / sales.length : 0;
+
   const exportCSV = () => {
     if (sales.length === 0) return;
     const headers = [
@@ -326,7 +337,7 @@ export default function VentasPage() {
 
       {/* Summary KPI Cards */}
       {summary && (
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
           <StatCard
             title="Total Facturado"
             value={formatCurrency(summary.totalSales)}
@@ -357,6 +368,27 @@ export default function VentasPage() {
             subtitle={`${summary.countSales} ventas | ${summary.countInvoiced} facturadas`}
             icon={Receipt}
             variant="default"
+          />
+          <StatCard
+            title="MC Promedio"
+            value={`${avgMcPct.toFixed(1)}%`}
+            subtitle="Margen de contribución promedio"
+            icon={Percent}
+            variant="default"
+          />
+          <StatCard
+            title="Facturado"
+            value={formatCurrency(totalFacturadoMonto)}
+            subtitle={`${pctFacturado.toFixed(1)}% del total`}
+            icon={CheckCircle2}
+            variant="success"
+          />
+          <StatCard
+            title="No Facturado"
+            value={formatCurrency(totalNoFacturadoMonto)}
+            subtitle={`${pctNoFacturado.toFixed(1)}% del total`}
+            icon={Clock}
+            variant="warning"
           />
         </div>
       )}

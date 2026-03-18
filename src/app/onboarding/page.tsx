@@ -41,6 +41,7 @@ const RUBROS = [
 ] as const;
 
 type RubroId = typeof RUBROS[number]["id"];
+type TaxStatus = "monotributista" | "responsable_inscripto";
 
 // Subcategorías sugeridas por rubro
 const CATS_BY_RUBRO: Record<RubroId, string[]> = {
@@ -209,10 +210,16 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 }
 
 // ── Step 1: Rubro ─────────────────────────────────────────────────────────────
-function StepRubro({ onNext }: { onNext: (rubro: RubroId) => void }) {
+function StepRubro({
+  onNext,
+}: {
+  onNext: (rubro: RubroId, fiscal: { taxStatus: TaxStatus; ivaRate: number }) => void;
+}) {
   const [selected, setSelected] = useState<RubroId | null>(null);
   const [subPhase, setSubPhase] = useState(false);
   const [subrubro, setSubrubro] = useState("");
+  const [taxStatus, setTaxStatus] = useState<TaxStatus>("monotributista");
+  const [ivaRate, setIvaRate] = useState(21);
 
   if (subPhase && selected) {
     const question = SUBRUBRO_QUESTION[selected];
@@ -229,14 +236,71 @@ function StepRubro({ onNext }: { onNext: (rubro: RubroId) => void }) {
           placeholder="Ej: ropa de mujer, tortas artesanales, plomería..."
           value={subrubro}
           onChange={(e) => setSubrubro(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onNext(selected)}
+          onKeyDown={(e) =>
+            e.key === "Enter" &&
+            onNext(selected, { taxStatus, ivaRate })
+          }
           autoFocus
           className="w-full h-11 rounded-xl border border-border bg-card px-4 text-sm outline-none focus:ring-1 focus:ring-primary transition-all placeholder:text-muted-foreground"
         />
+
+        <div className="rounded-xl border border-border bg-card p-3 space-y-3">
+          <p className="text-sm font-semibold text-foreground">Condición fiscal</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setTaxStatus("monotributista")}
+              className={cn(
+                "h-10 rounded-lg border text-sm font-medium transition",
+                taxStatus === "monotributista"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background border-border text-muted-foreground hover:border-primary/30"
+              )}
+            >
+              Monotributista
+            </button>
+            <button
+              type="button"
+              onClick={() => setTaxStatus("responsable_inscripto")}
+              className={cn(
+                "h-10 rounded-lg border text-sm font-medium transition",
+                taxStatus === "responsable_inscripto"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-background border-border text-muted-foreground hover:border-primary/30"
+              )}
+            >
+              Responsable Inscripto
+            </button>
+          </div>
+
+          {taxStatus === "responsable_inscripto" && (
+            <div className="space-y-1">
+              <p className="text-xs text-muted-foreground">IVA por defecto para precios públicos</p>
+              <div className="flex gap-2">
+                {[21, 10.5].map((rate) => (
+                  <button
+                    type="button"
+                    key={rate}
+                    onClick={() => setIvaRate(rate)}
+                    className={cn(
+                      "h-8 px-3 rounded-md border text-xs font-medium transition",
+                      ivaRate === rate
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background border-border text-muted-foreground hover:border-primary/30"
+                    )}
+                  >
+                    {rate}%
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="space-y-2">
           <Button
             className="w-full h-11 font-semibold gap-2"
-            onClick={() => onNext(selected)}
+            onClick={() => onNext(selected, { taxStatus, ivaRate })}
           >
             Continuar
             <ArrowRight className="w-4 h-4" />
@@ -474,7 +538,7 @@ function StepSupplier({ onNext }: { onNext: () => void }) {
           ¿A quién le comprás?
         </h2>
         <p className="text-muted-foreground text-sm mt-1.5">
-          Tu proveedor principal. Podés agregar más en Catálogos.
+          Tu proveedor principal. Podés agregar más en Configuraciones.
         </p>
       </div>
 
@@ -597,7 +661,7 @@ function StepProduct({
           <label className="text-sm font-medium text-foreground mb-1.5 block">
             Precio de costo{" "}
             <span className="text-muted-foreground font-normal">
-              (configurás precios de venta en Catálogos)
+                (configurás precios de venta en Configuraciones)
             </span>
           </label>
           <div className="relative">
@@ -867,6 +931,8 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [selectedRubro, setSelectedRubro] = useState<RubroId>("otro");
+  const [taxStatus, setTaxStatus] = useState<TaxStatus>("monotributista");
+  const [ivaRate, setIvaRate] = useState(21);
   const [createdCategoryId, setCreatedCategoryId] = useState<string | null>(null);
   const [createdProductId, setCreatedProductId] = useState<string | null>(null);
 
@@ -876,6 +942,20 @@ export default function OnboardingPage() {
     if (typeof window !== "undefined") {
       localStorage.setItem("sc_progress_v1", "4");
     }
+
+    try {
+      await fetch("/api/account", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taxStatus,
+          ivaRate,
+        }),
+      });
+    } catch {
+      // Non-blocking: si falla, el usuario igual puede completar onboarding
+    }
+
     try {
       await fetch("/api/auth/complete-onboarding", { method: "POST" });
     } catch {
@@ -892,8 +972,10 @@ export default function OnboardingPage() {
       case 1:
         return (
           <StepRubro
-            onNext={(rubro) => {
+            onNext={(rubro, fiscal) => {
               setSelectedRubro(rubro);
+              setTaxStatus(fiscal.taxStatus);
+              setIvaRate(fiscal.ivaRate);
               advance();
             }}
           />

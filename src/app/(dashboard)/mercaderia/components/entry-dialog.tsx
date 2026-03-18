@@ -43,11 +43,25 @@ type FormState = {
   notes: string;
 };
 
+function formatLocalDateInput(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDateInput(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T12:00:00`);
+  }
+  return new Date(value);
+}
+
 const EMPTY: FormState = {
   productId: "",
   quantity: "1",
   unitCost: "0",
-  movementDate: new Date().toISOString().split("T")[0],
+  movementDate: formatLocalDateInput(new Date()),
   notes: "",
 };
 
@@ -113,6 +127,7 @@ export function MerchandiseEntryDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
 
     if (!form.productId) {
       toast.error("Seleccioná un producto");
@@ -130,7 +145,7 @@ export function MerchandiseEntryDialog({
         productId: form.productId,
         quantity,
         unitCost,
-        movementDate: new Date(form.movementDate),
+        movementDate: parseLocalDateInput(form.movementDate),
         notes: form.notes || undefined,
       });
       toast.success(

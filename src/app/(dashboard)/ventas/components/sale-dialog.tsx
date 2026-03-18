@@ -56,12 +56,26 @@ type FormState = {
   notes: string;
 };
 
+function formatLocalDateInput(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function parseLocalDateInput(value: string): Date {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T12:00:00`);
+  }
+  return new Date(value);
+}
+
 const EMPTY: FormState = {
   productId: "",
   categoryId: "",
   priceListId: "",
   clientId: "",
-  saleDate: new Date().toISOString().split("T")[0],
+  saleDate: formatLocalDateInput(new Date()),
   origin: "minorista",
   unitPrice: "0",
   quantity: "1",
@@ -153,7 +167,7 @@ export function SaleDialog({
             categoryId: s.categoryId,
             priceListId: s.priceListId ?? "",
             clientId: s.clientId ?? "",
-            saleDate: new Date(s.saleDate).toISOString().split("T")[0],
+            saleDate: formatLocalDateInput(new Date(s.saleDate)),
             origin: s.origin,
             unitPrice: String(s.unitPrice),
             quantity: String(s.quantity),
@@ -161,7 +175,7 @@ export function SaleDialog({
             invoiced: s.invoiced,
             invoiceNumber: s.invoiceNumber ?? "",
             dueDate: s.dueDate
-              ? new Date(s.dueDate).toISOString().split("T")[0]
+              ? formatLocalDateInput(new Date(s.dueDate))
               : "",
             notes: s.notes ?? "",
           });
@@ -265,6 +279,7 @@ export function SaleDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
 
     if (!form.productId) {
       toast.error("Seleccioná un producto");
@@ -282,14 +297,14 @@ export function SaleDialog({
           id: editingId,
           priceListId: form.priceListId || null,
           clientId: form.clientId || null,
-          saleDate: new Date(form.saleDate),
+          saleDate: parseLocalDateInput(form.saleDate),
           origin: form.origin as any,
           unitPrice,
           quantity,
           discountPct,
           invoiced: form.invoiced,
           invoiceNumber: form.invoiceNumber || null,
-          dueDate: form.dueDate ? new Date(form.dueDate) : null,
+          dueDate: form.dueDate ? parseLocalDateInput(form.dueDate) : null,
           notes: form.notes || null,
         });
         toast.success("Venta actualizada");
@@ -300,7 +315,7 @@ export function SaleDialog({
           .map((p) => ({
             paymentMethodId: p.paymentMethodId,
             amount: parseFloat(p.amount),
-            paymentDate: new Date(p.paymentDate),
+            paymentDate: parseLocalDateInput(p.paymentDate),
           }));
 
         await trpc.ventas.create.mutate({
@@ -309,14 +324,14 @@ export function SaleDialog({
           categoryId: form.categoryId,
           priceListId: form.priceListId || null,
           clientId: form.clientId || null,
-          saleDate: new Date(form.saleDate),
+          saleDate: parseLocalDateInput(form.saleDate),
           origin: form.origin as any,
           unitPrice,
           quantity,
           discountPct,
           invoiced: form.invoiced,
           invoiceNumber: form.invoiceNumber || undefined,
-          dueDate: form.dueDate ? new Date(form.dueDate) : null,
+          dueDate: form.dueDate ? parseLocalDateInput(form.dueDate) : null,
           notes: form.notes || undefined,
           payments: validPayments,
         });

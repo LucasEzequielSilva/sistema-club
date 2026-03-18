@@ -266,8 +266,8 @@ export default function ComprasPage() {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <PageHeader
-        title="Compras"
-        description="Registro de egresos y pagos a proveedores"
+        title="Egresos"
+        description="Registro de egresos, compras y pagos"
         icon={ShoppingCart}
         actions={
           <div className="flex gap-2">
@@ -284,7 +284,7 @@ export default function ComprasPage() {
                 setShowDialog(true);
               }}
             >
-              + Nueva Compra
+              + Nuevo Egreso
             </Button>
           </div>
         }
@@ -407,8 +407,8 @@ export default function ComprasPage() {
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
               icon={ShoppingCart}
-              title="Sin compras registradas"
-              description="Antes de registrar compras, asegurate de tener proveedores cargados."
+              title="Sin egresos registrados"
+              description="Antes de registrar egresos, asegurate de tener proveedores y clasificaciones cargadas."
               actionLabel="Ver Proveedores"
               onAction={() => router.push("/proveedores")}
             />

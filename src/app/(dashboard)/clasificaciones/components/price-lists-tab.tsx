@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Star, Trash2, Loader2, Tag } from "lucide-react";
+import { Plus, Star, Trash2, Loader2, Tag, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type PriceList = {
@@ -29,6 +29,85 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
   const [newDefault, setNewDefault] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedListId, setExpandedListId] = useState<string | null>(null);
+  const [listItems, setListItems] = useState<Record<string, any[]>>({});
+  const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
+  const [savingMarkup, setSavingMarkup] = useState<string | null>(null);
+
+  const formatCurrency = (n: number) =>
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      minimumFractionDigits: 2,
+    }).format(n || 0);
+
+  const calcLive = (unitCost: number, markupPct: number) => {
+    const salePrice = unitCost * (1 + markupPct / 100);
+    const cmg = salePrice - unitCost;
+    const mc = salePrice > 0 ? (cmg / salePrice) * 100 : 0;
+    return {
+      salePrice,
+      contributionMargin: cmg,
+      marginPct: mc,
+    };
+  };
+
+  const loadItems = async (priceListId: string) => {
+    setLoadingItems((prev) => ({ ...prev, [priceListId]: true }));
+    try {
+      const res = await fetch(`/api/price-lists/list-items?priceListId=${priceListId}`);
+      const data = res.ok ? await res.json() : [];
+      setListItems((prev) => ({ ...prev, [priceListId]: data }));
+    } catch {
+      toast.error("No se pudieron cargar los productos de la lista");
+    } finally {
+      setLoadingItems((prev) => ({ ...prev, [priceListId]: false }));
+    }
+  };
+
+  const toggleExpand = async (priceListId: string) => {
+    if (expandedListId === priceListId) {
+      setExpandedListId(null);
+      return;
+    }
+    setExpandedListId(priceListId);
+    if (!listItems[priceListId]) {
+      await loadItems(priceListId);
+    }
+  };
+
+  const onMarkupChange = (priceListId: string, productId: string, value: string) => {
+    const parsed = parseFloat(value);
+    const markup = Number.isFinite(parsed) ? parsed : 0;
+    setListItems((prev) => {
+      const arr = prev[priceListId] || [];
+      return {
+        ...prev,
+        [priceListId]: arr.map((it: any) => {
+          if (it.productId !== productId) return it;
+          return { ...it, markupPct: markup, ...calcLive(it.unitCost || 0, markup) };
+        }),
+      };
+    });
+  };
+
+  const saveMarkup = async (priceListId: string, productId: string, markupPct: number) => {
+    const key = `${priceListId}:${productId}`;
+    setSavingMarkup(key);
+    try {
+      const res = await fetch("/api/price-lists/list-items", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceListId, productId, markupPct }),
+      });
+      if (!res.ok) throw new Error("save failed");
+    } catch {
+      toast.error("No se pudo guardar el markup");
+      await loadItems(priceListId);
+    } finally {
+      setSavingMarkup(null);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -177,63 +256,135 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
       {lists.length > 0 && (
         <div className="space-y-2">
           {lists.map((list) => (
-            <div
-              key={list.id}
-              className={cn(
-                "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
-                list.isDefault
-                  ? "border-primary/30 bg-primary/5"
-                  : "border-border bg-card hover:bg-muted/30"
-              )}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm text-foreground">{list.name}</span>
-                  {list.isDefault && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 bg-primary/10 text-primary border-primary/20">
-                      <Star className="w-2.5 h-2.5 mr-0.5" />
-                      Predeterminada
-                    </Badge>
-                  )}
-                  {!list.isActive && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5">Inactiva</Badge>
-                  )}
+            <div key={list.id} className="space-y-2">
+              <div
+                className={cn(
+                  "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
+                  list.isDefault
+                    ? "border-primary/30 bg-primary/5"
+                    : "border-border bg-card hover:bg-muted/30"
+                )}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-foreground">{list.name}</span>
+                    {list.isDefault && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5 bg-primary/10 text-primary border-primary/20">
+                        <Star className="w-2.5 h-2.5 mr-0.5" />
+                        Predeterminada
+                      </Badge>
+                    )}
+                    {!list.isActive && (
+                      <Badge variant="secondary" className="text-[10px] px-1.5">Inactiva</Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {list._count.items} {list._count.items === 1 ? "producto" : "productos"} · {" "}
+                    {list._count.sales} {list._count.sales === 1 ? "venta" : "ventas"}
+                  </p>
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {list._count.items} {list._count.items === 1 ? "producto" : "productos"} ·{" "}
-                  {list._count.sales} {list._count.sales === 1 ? "venta" : "ventas"}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                {!list.isDefault && (
+                <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleSetDefault(list.id, list.name)}
-                    className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
-                    title="Hacer predeterminada"
+                    className="text-xs h-7 px-2"
+                    onClick={() => toggleExpand(list.id)}
                   >
-                    <Star className="w-3.5 h-3.5 mr-1" />
-                    Predeterminar
-                  </Button>
-                )}
-                {!list.isDefault && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                    disabled={deletingId === list.id}
-                    onClick={() => handleDelete(list.id, list.name)}
-                    title="Eliminar lista"
-                  >
-                    {deletingId === list.id ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    {expandedListId === list.id ? (
+                      <ChevronUp className="w-3.5 h-3.5 mr-1" />
                     ) : (
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <ChevronDown className="w-3.5 h-3.5 mr-1" />
                     )}
+                    Productos
                   </Button>
-                )}
+                  {!list.isDefault && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleSetDefault(list.id, list.name)}
+                      className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
+                      title="Hacer predeterminada"
+                    >
+                      <Star className="w-3.5 h-3.5 mr-1" />
+                      Predeterminar
+                    </Button>
+                  )}
+                  {!list.isDefault && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                      disabled={deletingId === list.id}
+                      onClick={() => handleDelete(list.id, list.name)}
+                      title="Eliminar lista"
+                    >
+                      {deletingId === list.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
+
+              {expandedListId === list.id && (
+                <div className="border border-border rounded-xl p-3 bg-card">
+                  {loadingItems[list.id] ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Cargando productos...
+                    </div>
+                  ) : (listItems[list.id] || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-2">No hay productos activos en esta lista.</p>
+                  ) : (
+                    <div className="overflow-auto">
+                      <table className="w-full text-sm min-w-[820px]">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="text-left py-2">Producto</th>
+                            <th className="text-right py-2">Costo</th>
+                            <th className="text-right py-2">MKUP %</th>
+                            <th className="text-right py-2">PV Neto</th>
+                            <th className="text-right py-2">PV + IVA</th>
+                            <th className="text-right py-2">CMG</th>
+                            <th className="text-right py-2">MC %</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(listItems[list.id] || []).map((it: any) => {
+                            const key = `${list.id}:${it.productId}`;
+                            return (
+                              <tr key={key} className="border-b border-border/60 last:border-0">
+                                <td className="py-2 font-medium">{it.productName}</td>
+                                <td className="py-2 text-right font-mono">{formatCurrency(it.unitCost)}</td>
+                                <td className="py-2 text-right">
+                                  <Input
+                                    type="number"
+                                    step="0.1"
+                                    className="w-[90px] ml-auto text-right"
+                                    value={String(it.markupPct ?? 0)}
+                                    onChange={(e) => onMarkupChange(list.id, it.productId, e.target.value)}
+                                    onBlur={(e) => saveMarkup(list.id, it.productId, parseFloat(e.target.value) || 0)}
+                                    disabled={savingMarkup === key}
+                                  />
+                                </td>
+                                <td className="py-2 text-right font-mono">{formatCurrency(it.salePrice)}</td>
+                                <td className="py-2 text-right font-mono">
+                                  {it.salePriceWithIva !== null && it.salePriceWithIva !== undefined
+                                    ? formatCurrency(it.salePriceWithIva)
+                                    : "—"}
+                                </td>
+                                <td className="py-2 text-right font-mono">{formatCurrency(it.contributionMargin)}</td>
+                                <td className="py-2 text-right font-mono">{(it.marginPct || 0).toFixed(2)}%</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

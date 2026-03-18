@@ -32,7 +32,7 @@ import { useState } from "react";
 const primaryNav = [
   { title: "Hoy",            href: "/tablero",      icon: Sun },
   { title: "Ventas",         href: "/ventas",        icon: TrendingUp },
-  { title: "Compras",        href: "/compras",       icon: ShoppingCart },
+  { title: "Egresos",        href: "/compras",       icon: ShoppingCart },
   { title: "Punto de Venta", href: "/pos",           icon: Monitor },
 ];
 
@@ -45,7 +45,7 @@ const finanzasNav = [
   { title: "Cuentas",       href: "/cuentas",            icon: Landmark },
 ];
 
-// ─── Catálogos (colapsable) ──────────────────────────────────────────────────
+// ─── Configuraciones (colapsable) ────────────────────────────────────────────
 const catalogosNav = [
   { title: "Productos",       href: "/productos",       icon: Package },
   { title: "Proveedores",     href: "/proveedores",     icon: Building2 },
@@ -167,11 +167,8 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
             </div>
           )}
 
-          {/* ── CATÁLOGOS ───────────────────────────────────────── */}
+          {/* ── CONFIGURACIONES ─────────────────────────────────── */}
           <div className="my-2 border-t border-[var(--sidebar-border)]" />
-          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 px-3 pt-1 pb-1">
-            Catálogos
-          </p>
 
           <button
             onClick={() => setCatalogosOpen((v) => !v)}
@@ -183,7 +180,7 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
             )}
           >
             <BookOpen className="w-4 h-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground" />
-            <span className="flex-1 text-left">Catálogos</span>
+            <span className="flex-1 text-left">Configuraciones</span>
             {catalogosOpen
               ? <ChevronDown className="w-3 h-3 text-muted-foreground/40" />
               : <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
