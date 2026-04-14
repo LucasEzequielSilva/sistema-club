@@ -61,6 +61,7 @@ export const updateProductSchema = z.object({
   rawMaterialCost: z.number().min(0).optional(),
   laborCost: z.number().min(0).optional(),
   packagingCost: z.number().min(0).optional(),
+  effectiveDate: z.coerce.date().optional(),
 
   isActive: z.boolean().optional(),
 });

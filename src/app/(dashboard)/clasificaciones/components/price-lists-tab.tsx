@@ -5,7 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Star, Trash2, Loader2, Tag, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Plus,
+  Star,
+  Trash2,
+  Loader2,
+  Tag,
+  ChevronDown,
+  ChevronUp,
+  Pencil,
+  Check,
+  X,
+  Save,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type PriceList = {
@@ -33,6 +45,10 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
   const [listItems, setListItems] = useState<Record<string, any[]>>({});
   const [loadingItems, setLoadingItems] = useState<Record<string, boolean>>({});
   const [savingMarkup, setSavingMarkup] = useState<string | null>(null);
+  const [dirtyMarkup, setDirtyMarkup] = useState<Record<string, boolean>>({});
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editingNameValue, setEditingNameValue] = useState("");
+  const [savingNameId, setSavingNameId] = useState<string | null>(null);
 
   const formatCurrency = (n: number) =>
     new Intl.NumberFormat("es-AR", {
@@ -89,6 +105,7 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
         }),
       };
     });
+    setDirtyMarkup((prev) => ({ ...prev, [priceListId]: true }));
   };
 
   const saveMarkup = async (priceListId: string, productId: string, markupPct: number) => {
@@ -106,6 +123,68 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
       await loadItems(priceListId);
     } finally {
       setSavingMarkup(null);
+    }
+  };
+
+  const saveAllMarkup = async (priceListId: string) => {
+    const items = listItems[priceListId] || [];
+    if (items.length === 0) return;
+    setSavingMarkup(priceListId);
+    try {
+      for (const it of items) {
+        const res = await fetch("/api/price-lists/list-items", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            priceListId,
+            productId: it.productId,
+            markupPct: parseFloat(String(it.markupPct)) || 0,
+          }),
+        });
+        if (!res.ok) throw new Error("save failed");
+      }
+      setDirtyMarkup((prev) => ({ ...prev, [priceListId]: false }));
+      toast.success("Markup guardado");
+    } catch {
+      toast.error("No se pudo guardar el markup de la lista");
+      await loadItems(priceListId);
+    } finally {
+      setSavingMarkup(null);
+    }
+  };
+
+  const startEditName = (list: PriceList) => {
+    setEditingNameId(list.id);
+    setEditingNameValue(list.name);
+  };
+
+  const cancelEditName = () => {
+    setEditingNameId(null);
+    setEditingNameValue("");
+  };
+
+  const saveListName = async (listId: string) => {
+    const name = editingNameValue.trim();
+    if (!name) return;
+    setSavingNameId(listId);
+    try {
+      const res = await fetch("/api/price-lists", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: listId, name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo renombrar la lista");
+        return;
+      }
+      toast.success("Nombre de lista actualizado");
+      cancelEditName();
+      await load();
+    } catch {
+      toast.error("No se pudo renombrar la lista");
+    } finally {
+      setSavingNameId(null);
     }
   };
 
@@ -267,7 +346,45 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-sm text-foreground">{list.name}</span>
+                    {editingNameId === list.id ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editingNameValue}
+                          onChange={(e) => setEditingNameValue(e.target.value)}
+                          className="h-8 w-[220px]"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveListName(list.id);
+                            if (e.key === "Escape") cancelEditName();
+                          }}
+                          autoFocus
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => saveListName(list.id)}
+                          disabled={savingNameId === list.id || !editingNameValue.trim()}
+                          title="Guardar nombre"
+                        >
+                          {savingNameId === list.id ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5" />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={cancelEditName}
+                          title="Cancelar"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="font-medium text-sm text-foreground">{list.name}</span>
+                    )}
                     {list.isDefault && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 bg-primary/10 text-primary border-primary/20">
                         <Star className="w-2.5 h-2.5 mr-0.5" />
@@ -297,6 +414,17 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
                     )}
                     Productos
                   </Button>
+                  {editingNameId !== list.id && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-muted-foreground"
+                      onClick={() => startEditName(list)}
+                      title="Renombrar lista"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </Button>
+                  )}
                   {!list.isDefault && (
                     <Button
                       variant="ghost"
@@ -330,6 +458,24 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
 
               {expandedListId === list.id && (
                 <div className="border border-border rounded-xl p-3 bg-card">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs text-muted-foreground">
+                      Editá los MKUP y guardá los cambios de esta lista.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => saveAllMarkup(list.id)}
+                      disabled={!dirtyMarkup[list.id] || savingMarkup === list.id}
+                      className="h-8"
+                    >
+                      {savingMarkup === list.id ? (
+                        <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                      ) : (
+                        <Save className="w-3.5 h-3.5 mr-1" />
+                      )}
+                      Guardar MKUP
+                    </Button>
+                  </div>
                   {loadingItems[list.id] ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                       <Loader2 className="w-4 h-4 animate-spin" /> Cargando productos...
@@ -364,8 +510,7 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
                                     className="w-[90px] ml-auto text-right"
                                     value={String(it.markupPct ?? 0)}
                                     onChange={(e) => onMarkupChange(list.id, it.productId, e.target.value)}
-                                    onBlur={(e) => saveMarkup(list.id, it.productId, parseFloat(e.target.value) || 0)}
-                                    disabled={savingMarkup === key}
+                                    disabled={savingMarkup === list.id || savingMarkup === key}
                                   />
                                 </td>
                                 <td className="py-2 text-right font-mono">{formatCurrency(it.salePrice)}</td>

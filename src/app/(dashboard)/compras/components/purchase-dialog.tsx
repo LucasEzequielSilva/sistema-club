@@ -35,6 +35,13 @@ type Product = { id: string; name: string; unitCost: number };
 type Supplier = { id: string; name: string };
 type CostCategory = { id: string; name: string; costType: string };
 type PaymentMethod = { id: string; name: string; accreditationDays: number };
+type PaymentChannel = {
+  id: string;
+  name: string;
+  paymentMethodId: string | null;
+  paymentAccount?: { id: string; name: string };
+  isActive: boolean;
+};
 
 type IvaMode = "0" | "10.5" | "21" | "custom";
 
@@ -53,6 +60,7 @@ type PurchaseItem = {
 
 type InlinePayment = {
   paymentMethodId: string;
+  paymentChannelId: string;
   amount: string;
   paymentDate: string;
 };
@@ -366,6 +374,7 @@ export function PurchaseDialog({
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [costCategories, setCostCategories] = useState<CostCategory[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
 
   // Load lookups
   useEffect(() => {
@@ -409,6 +418,13 @@ export function PurchaseDialog({
           }))
         )
       )
+      .catch(() => {});
+
+    trpc.clasificaciones.listPaymentChannels
+      .query({ accountId, isActive: true })
+      .then((channels: any[]) => {
+        setPaymentChannels(channels.filter((c: any) => c.isActive));
+      })
       .catch(() => {});
   }, [open, accountId]);
 
@@ -470,6 +486,7 @@ export function PurchaseDialog({
       ...prev,
       {
         paymentMethodId: "",
+        paymentChannelId: "",
         amount: String(Math.max(grandTotal - totalPayments, 0).toFixed(2)),
         paymentDate: header.invoiceDate,
       },
@@ -526,6 +543,7 @@ export function PurchaseDialog({
           .filter((p) => p.paymentMethodId && parseFloat(p.amount) > 0)
           .map((p) => ({
             paymentMethodId: p.paymentMethodId,
+            paymentChannelId: p.paymentChannelId || null,
             amount: parseFloat(p.amount),
             paymentDate: parseLocalDateInput(p.paymentDate),
           }));
@@ -562,6 +580,7 @@ export function PurchaseDialog({
                 rawMaterialCost: 0,
                 laborCost: 0,
                 packagingCost: 0,
+                effectiveDate: parseLocalDateInput(header.invoiceDate),
               });
             } catch {
               // No crítico
@@ -720,7 +739,7 @@ export function PurchaseDialog({
                 ) : (
                   <div className="space-y-2">
                     {payments.map((payment, idx) => (
-                      <div key={idx} className="grid grid-cols-[1fr_120px_140px_auto] gap-2 items-end">
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_120px_140px_auto] gap-2 items-end">
                         <div>
                           <Label className="text-xs">Método</Label>
                           <Select
@@ -735,6 +754,33 @@ export function PurchaseDialog({
                               {paymentMethods.map((m) => (
                                 <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Canal</Label>
+                          <Select
+                            value={payment.paymentChannelId || "none"}
+                            onValueChange={(v) => updatePayment(idx, "paymentChannelId", v === "none" ? "" : v)}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Automático" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Automático</SelectItem>
+                              {paymentChannels
+                                .filter(
+                                  (ch) =>
+                                    !payment.paymentMethodId ||
+                                    !ch.paymentMethodId ||
+                                    ch.paymentMethodId === payment.paymentMethodId
+                                )
+                                .map((ch) => (
+                                  <SelectItem key={ch.id} value={ch.id}>
+                                    {ch.name}
+                                    {ch.paymentAccount?.name ? ` · ${ch.paymentAccount.name}` : ""}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </div>

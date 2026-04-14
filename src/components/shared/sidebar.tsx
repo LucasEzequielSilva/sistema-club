@@ -24,8 +24,17 @@ import {
   BookOpen,
   LogOut,
   Settings,
+  ChevronsUpDown,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useState } from "react";
 
 // ─── Ítems de nav principal ─────────────────────────────────────────────────
@@ -206,37 +215,47 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
         </nav>
       </ScrollArea>
 
-      {/* Footer — settings + usuario + logout */}
-      <div className="px-2 py-3 border-t border-[var(--sidebar-border)] space-y-1">
-        <Link href="/settings" onClick={onNavigate}>
-          <div className={cn(
-            "flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors duration-150 cursor-pointer group",
-            pathname.startsWith("/settings")
-              ? "border-l-2 border-primary bg-primary/[0.08] text-foreground font-medium"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground"
-          )}>
-            <Settings className={cn("w-4 h-4 shrink-0 transition-colors",
-              pathname.startsWith("/settings") ? "text-primary" : "text-muted-foreground/50 group-hover:text-muted-foreground"
-            )} />
-            <span className="flex-1">Configuración</span>
-          </div>
-        </Link>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md group">
-          <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-[10px] font-bold text-primary-foreground shrink-0">
-            {initials}
-          </div>
-          <div className="leading-none min-w-0 flex-1">
-            <p className="text-xs text-foreground font-medium truncate">{displayName}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{userEmail}</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            title="Cerrar sesión"
-            className="shrink-0 p-1 rounded text-muted-foreground/50 hover:text-destructive hover:bg-destructive/10 transition-colors opacity-0 group-hover:opacity-100"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
-        </div>
+      {/* Footer — usuario con dropdown */}
+      <div className="p-2 border-t border-[var(--sidebar-border)]">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="flex items-center gap-2 px-2 py-2 rounded-md cursor-pointer hover:bg-accent text-foreground transition-colors group">
+              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary shrink-0 overflow-hidden ring-1 ring-primary/20">
+                {initials}
+              </div>
+              <div className="leading-none min-w-0 flex-1">
+                <p className="text-[13px] font-medium truncate">{displayName}</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{userEmail}</p>
+              </div>
+              <ChevronsUpDown className="w-4 h-4 text-muted-foreground shrink-0 opacity-50 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="center" side="top" className="w-[calc(14rem-16px)]" sideOffset={8}>
+            <DropdownMenuLabel className="p-0 font-normal">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0 border border-primary/20">
+                  {initials}
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold">{displayName}</span>
+                  <span className="truncate text-[10px] text-muted-foreground">{userEmail}</span>
+                </div>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/settings" onClick={onNavigate} className="flex items-center cursor-pointer w-full">
+                <Settings className="mr-2 w-4 h-4 text-muted-foreground" />
+                <span>Configuración</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer">
+              <LogOut className="mr-2 w-4 h-4" />
+              <span>Cerrar sesión</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
     </aside>

@@ -844,11 +844,11 @@ function StepPayments({ onNext }: { onNext: () => void }) {
 
 // ── Step 5: ¡Listo! ───────────────────────────────────────────────────────────
 function StepDone({
-  productId,
+  onGoEgresos,
   onGoProduct,
   onGoTablero,
 }: {
-  productId: string | null;
+  onGoEgresos: () => void;
   onGoProduct: () => void;
   onGoTablero: () => void;
 }) {
@@ -904,7 +904,7 @@ function StepDone({
           <p className="text-xs font-bold uppercase tracking-wide text-primary/70">Próximo paso</p>
           <p className="text-sm font-semibold text-foreground">Registrá tu stock inicial</p>
           <p className="text-xs text-muted-foreground">
-            Andá a tu producto, hacé una compra o ingresá el stock directamente para empezar a vender.
+            Para empezar a vender sin fricción, registrá una compra/egreso y cargá stock del producto.
           </p>
         </div>
 
@@ -912,9 +912,12 @@ function StepDone({
         <div className="space-y-2 pt-2">
           <Button
             className="w-full h-12 text-base font-semibold gap-2 shadow-md shadow-primary/20"
-            onClick={onGoProduct}
+            onClick={onGoEgresos}
           >
             <Package className="w-4 h-4" />
+            Registrar stock (Egresos)
+          </Button>
+          <Button variant="outline" className="w-full" onClick={onGoProduct}>
             Ver mi producto
           </Button>
           <Button variant="outline" className="w-full" onClick={onGoTablero}>
@@ -1007,7 +1010,7 @@ export default function OnboardingPage() {
       case 6:
         return (
           <StepDone
-            productId={createdProductId}
+            onGoEgresos={() => complete("/compras")}
             onGoProduct={() => complete("/productos")}
             onGoTablero={() => complete("/tablero")}
           />

@@ -32,6 +32,8 @@ model Account {
   productCategories ProductCategory[]
   costCategories    CostCategory[]
   paymentMethods    PaymentMethod[]
+  paymentAccounts   PaymentAccount[]
+  paymentChannels   PaymentChannel[]
   suppliers         Supplier[]
   clients           Client[]
   
@@ -170,11 +172,57 @@ model PaymentMethod {
 
   // Relations
   account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  channels            PaymentChannel[]
   salePayments        SalePayment[]
   purchasePayments    PurchasePayment[]
 
   @@unique([accountId, name])
   @@map("payment_methods")
+}
+
+model PaymentAccount {
+  id                  String    @id @default(cuid())
+  accountId           String
+  name                String
+  provider            String?   // banco | mercado_pago | caja | etc
+  identifier          String?   // alias, CBU/CVU, etc
+  isDefault           Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  channels            PaymentChannel[]
+  salePayments        SalePayment[]
+  purchasePayments    PurchasePayment[]
+
+  @@unique([accountId, name])
+  @@map("payment_accounts")
+}
+
+model PaymentChannel {
+  id                  String    @id @default(cuid())
+  accountId           String
+  paymentAccountId    String
+  paymentMethodId     String?   // Compatibilidad con método legacy
+  name                String
+  accreditationDays   Int       @default(0)
+  feePct              Float     @default(0)
+  isDefault           Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Relations
+  account             Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  paymentAccount      PaymentAccount @relation(fields: [paymentAccountId], references: [id], onDelete: Restrict)
+  paymentMethod       PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  salePayments        SalePayment[]
+  purchasePayments    PurchasePayment[]
+
+  @@unique([accountId, name])
+  @@map("payment_channels")
 }
 
 model Supplier {
@@ -351,6 +399,8 @@ model SalePayment {
   id                String    @id @default(cuid())
   saleId            String
   paymentMethodId   String
+  paymentAccountId  String?
+  paymentChannelId  String?
   
   amount            Float
   paymentDate       DateTime
@@ -360,7 +410,9 @@ model SalePayment {
 
   // Relations
   sale              Sale      @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  paymentMethod     PaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  paymentMethod     PaymentMethod  @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  paymentAccount    PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+  paymentChannel    PaymentChannel? @relation(fields: [paymentChannelId], references: [id], onDelete: SetNull)
 
   @@map("sale_payments")
 }
@@ -409,6 +461,8 @@ model PurchasePayment {
   id                String    @id @default(cuid())
   purchaseId        String
   paymentMethodId   String
+  paymentAccountId  String?
+  paymentChannelId  String?
   
   amount            Float
   paymentDate       DateTime
@@ -418,7 +472,9 @@ model PurchasePayment {
 
   // Relations
   purchase          Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  paymentMethod     PaymentMethod @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  paymentMethod     PaymentMethod  @relation(fields: [paymentMethodId], references: [id], onDelete: Restrict)
+  paymentAccount    PaymentAccount? @relation(fields: [paymentAccountId], references: [id], onDelete: SetNull)
+  paymentChannel    PaymentChannel? @relation(fields: [paymentChannelId], references: [id], onDelete: SetNull)
 
   @@map("purchase_payments")
 }

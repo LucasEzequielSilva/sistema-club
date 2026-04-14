@@ -42,6 +42,8 @@ export const createSaleSchema = z.object({
     .array(
       z.object({
         paymentMethodId: z.string().cuid("Método de pago inválido"),
+        paymentAccountId: z.string().cuid("Cuenta receptora inválida").optional().nullable(),
+        paymentChannelId: z.string().cuid("Canal inválido").optional().nullable(),
         amount: z.number().min(0.01, "El monto debe ser mayor a 0"),
         paymentDate: z.coerce.date(),
       })
@@ -74,6 +76,8 @@ export const updateSaleSchema = z.object({
 export const addSalePaymentSchema = z.object({
   saleId: z.string().cuid("Invalid sale ID"),
   paymentMethodId: z.string().cuid("Método de pago es obligatorio"),
+  paymentAccountId: z.string().cuid("Cuenta receptora inválida").optional().nullable(),
+  paymentChannelId: z.string().cuid("Canal inválido").optional().nullable(),
   amount: z.number().min(0.01, "El monto debe ser mayor a 0"),
   paymentDate: z.coerce.date({ message: "Fecha de pago es obligatoria" }),
   notes: z

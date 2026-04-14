@@ -18,7 +18,7 @@ export default function ClassificacionesPage() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
       <PageHeader
         title="Clasificaciones"
-        description="Listas de precios, categorías y métodos de pago"
+        description="Listas de precios, categorías y configuración de cobros/pagos"
         icon={Tag}
       />
 
@@ -27,7 +27,7 @@ export default function ClassificacionesPage() {
           <TabsTrigger value="precios">Listas de Precios</TabsTrigger>
           <TabsTrigger value="productos">Categorías</TabsTrigger>
           <TabsTrigger value="costos">Costos</TabsTrigger>
-          <TabsTrigger value="pagos">Métodos de Pago</TabsTrigger>
+          <TabsTrigger value="pagos">Cobros y Canales</TabsTrigger>
         </TabsList>
 
         <TabsContent value="precios" className="space-y-4">

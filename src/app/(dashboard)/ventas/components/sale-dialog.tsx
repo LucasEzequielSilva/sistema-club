@@ -33,9 +33,17 @@ interface SaleDialogProps {
 type Product = { id: string; name: string; categoryId: string };
 type PriceList = { id: string; name: string; isDefault: boolean };
 type PaymentMethod = { id: string; name: string; accreditationDays: number };
+type PaymentChannel = {
+  id: string;
+  name: string;
+  paymentMethodId: string | null;
+  paymentAccount?: { id: string; name: string };
+  isActive: boolean;
+};
 
 type InlinePayment = {
   paymentMethodId: string;
+  paymentChannelId: string;
   amount: string;
   paymentDate: string;
 };
@@ -111,6 +119,7 @@ export function SaleDialog({
   const [products, setProducts] = useState<Product[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
   const [unitCostSnapshot, setUnitCostSnapshot] = useState(0);
   const [isRI, setIsRI] = useState(false);
   const [ivaRate, setIvaRate] = useState(21);
@@ -150,6 +159,13 @@ export function SaleDialog({
             }))
         )
       )
+      .catch(() => {});
+
+    trpc.clasificaciones.listPaymentChannels
+      .query({ accountId, isActive: true })
+      .then((channels: any[]) => {
+        setPaymentChannels(channels.filter((c: any) => c.isActive));
+      })
       .catch(() => {});
   }, [open, accountId]);
 
@@ -257,6 +273,7 @@ export function SaleDialog({
       ...prev,
       {
         paymentMethodId: "",
+        paymentChannelId: "",
         amount: String(Math.max(total - totalPayments, 0).toFixed(2)),
         paymentDate: form.saleDate,
       },
@@ -314,6 +331,7 @@ export function SaleDialog({
           .filter((p) => p.paymentMethodId && parseFloat(p.amount) > 0)
           .map((p) => ({
             paymentMethodId: p.paymentMethodId,
+            paymentChannelId: p.paymentChannelId || null,
             amount: parseFloat(p.amount),
             paymentDate: parseLocalDateInput(p.paymentDate),
           }));
@@ -606,10 +624,7 @@ export function SaleDialog({
                 ) : (
                   <div className="space-y-2">
                     {payments.map((payment, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-[1fr_120px_140px_auto] gap-2 items-end"
-                      >
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_120px_140px_auto] gap-2 items-end">
                         <div>
                           <Label className="text-xs">Método</Label>
                           <Select
@@ -634,6 +649,39 @@ export function SaleDialog({
                                   {m.name}
                                 </SelectItem>
                               ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-xs">Canal</Label>
+                          <Select
+                            value={payment.paymentChannelId || "none"}
+                            onValueChange={(v) =>
+                              updatePayment(
+                                idx,
+                                "paymentChannelId",
+                                v === "none" ? "" : v
+                              )
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Automático" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Automático</SelectItem>
+                              {paymentChannels
+                                .filter(
+                                  (ch) =>
+                                    !payment.paymentMethodId ||
+                                    !ch.paymentMethodId ||
+                                    ch.paymentMethodId === payment.paymentMethodId
+                                )
+                                .map((ch) => (
+                                  <SelectItem key={ch.id} value={ch.id}>
+                                    {ch.name}
+                                    {ch.paymentAccount?.name ? ` · ${ch.paymentAccount.name}` : ""}
+                                  </SelectItem>
+                                ))}
                             </SelectContent>
                           </Select>
                         </div>

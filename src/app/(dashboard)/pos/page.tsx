@@ -52,6 +52,16 @@ type Product = {
 
 type PriceList = { id: string; name: string; isDefault: boolean };
 type PaymentMethod = { id: string; name: string; accreditationDays: number };
+type PaymentChannel = {
+  id: string;
+  name: string;
+  paymentMethodId: string | null;
+  paymentAccountId: string;
+  accreditationDays: number;
+  isDefault: boolean;
+  isActive: boolean;
+  paymentAccount?: { id: string; name: string };
+};
 
 type PricingInfo = {
   unitCost: number;
@@ -104,6 +114,10 @@ function formatDate(d: Date) {
   });
 }
 
+function formatQuantity(value: number, unit: string) {
+  return unit === "unidad" ? String(Math.round(value)) : value.toFixed(1);
+}
+
 function normalizeText(value: string): string {
   return value
     .normalize("NFD")
@@ -132,6 +146,7 @@ export default function PosPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [priceLists, setPriceLists] = useState<PriceList[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [paymentChannels, setPaymentChannels] = useState<PaymentChannel[]>([]);
   const [loadingLookups, setLoadingLookups] = useState(true);
 
   // ── Search ──
@@ -143,12 +158,9 @@ export default function PosPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // ── Form state ──
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedPriceListId, setSelectedPriceListId] = useState("");
-  const [pricing, setPricing] = useState<PricingInfo | null>(null);
-  const [quantity, setQuantity] = useState("1");
-  const [discountPct, setDiscountPct] = useState("0");
   const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [paymentChannelId, setPaymentChannelId] = useState("");
   const [origin, setOrigin] = useState<"minorista" | "mayorista">("minorista");
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -157,31 +169,51 @@ export default function PosPage() {
   const [lastSale, setLastSale] = useState<LastSale | null>(null);
   const [salesCount, setSalesCount] = useState(0);
   const [salesTotalToday, setSalesTotalToday] = useState(0);
+  const [isRI, setIsRI] = useState(false);
+  const [ivaRate, setIvaRate] = useState(21);
   const [recentProducts, setRecentProducts] = useState<{ id: string; name: string }[]>([]);
   const [lastSaleConfig, setLastSaleConfig] = useState<{
     productId: string;
     quantity: string;
     paymentMethodId: string;
-    discountPct: string;
+    paymentChannelId: string;
   } | null>(null);
 
   // ── Load lookups on mount ──
   useEffect(() => {
     if (!accountId) return;
     setLoadingLookups(true);
-    Promise.all([
-      trpc.productos.list.query({ accountId, isActive: true }),
-      trpc.productos.getPriceLists.query({ accountId }),
-      trpc.clasificaciones.listPaymentMethods.query({
-        accountId,
-      }),
-    ])
-      .then(([prods, lists, methods]: [any[], any[], any[]]) => {
+    fetch("/api/account")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((acc) => {
+        if (!acc) return;
+        setIsRI(acc.taxStatus === "responsable_inscripto");
+        setIvaRate(Number(acc.ivaRate ?? 21));
+      })
+      .catch(() => null);
+
+    trpc.clasificaciones.bootstrapPaymentRouting
+      .mutate({ accountId })
+      .catch(() => null)
+      .then(() =>
+        Promise.all([
+          trpc.productos.list.query({ accountId, isActive: true }),
+          trpc.productos.getPriceLists.query({ accountId }),
+          trpc.clasificaciones.listPaymentMethods.query({
+            accountId,
+          }),
+          trpc.clasificaciones.listPaymentChannels.query({
+            accountId,
+            isActive: true,
+          }),
+        ])
+      )
+      .then(([prods, lists, methods, channels]) => {
         setProducts(prods);
         setPriceLists(lists);
 
         // Set default price list
-        const defaultList = lists.find((l: any) => l.isDefault);
+        const defaultList = lists.find((l) => l.isDefault);
         if (defaultList) {
           setSelectedPriceListId(defaultList.id);
           // Set origin based on default list name
@@ -193,13 +225,14 @@ export default function PosPage() {
         }
 
         const activeMethods = methods
-          .filter((m: any) => m.isActive)
-          .map((m: any) => ({
+          .filter((m) => m.isActive)
+          .map((m) => ({
             id: m.id,
             name: m.name,
             accreditationDays: m.accreditationDays,
           }));
         setPaymentMethods(activeMethods);
+        setPaymentChannels(channels as PaymentChannel[]);
 
         // Default to "Efectivo" if available
         const efectivo = activeMethods.find(
@@ -213,18 +246,27 @@ export default function PosPage() {
       .finally(() => setLoadingLookups(false));
   }, [accountId]);
 
-  // ── Select product ── (declarado antes del search useEffect)
-  const selectProduct = useCallback(
-    (product: Product) => {
-      setSelectedProduct(product);
-      setSearchTerm(product.name);
-      setShowDropdown(false);
-      setQuantity("1");
-      setDiscountPct("0");
-      setHighlightedIndex(-1);
-    },
-    []
-  );
+  useEffect(() => {
+    if (!paymentMethodId) {
+      setPaymentChannelId("");
+      return;
+    }
+
+    const methodChannels = paymentChannels.filter(
+      (ch) => !ch.paymentMethodId || ch.paymentMethodId === paymentMethodId
+    );
+
+    if (methodChannels.length === 0) {
+      setPaymentChannelId("");
+      return;
+    }
+
+    const currentIsValid = methodChannels.some((ch) => ch.id === paymentChannelId);
+    if (currentIsValid) return;
+
+    const next = methodChannels.find((ch) => ch.isDefault) ?? methodChannels[0];
+    setPaymentChannelId(next?.id ?? "");
+  }, [paymentMethodId, paymentChannels, paymentChannelId]);
 
   // ── Product search with debounce ──
   useEffect(() => {
@@ -238,15 +280,16 @@ export default function PosPage() {
       const term = normalizeText(searchTerm);
       const results = products.filter((p) => matchesSearch(p, term));
 
-      // Auto-select si hay match EXACTO de código de barras o SKU
-      // (el lector escanea → tipea el código completo → auto-selecciona sin Enter)
+      // Si hay match EXACTO de código de barras o SKU, priorizarlo en dropdown
       const exactMatch = results.find(
         (p) =>
           normalizeText(p.barcode ?? "") === term ||
           normalizeText(p.sku ?? "") === term
       );
       if (exactMatch) {
-        selectProduct(exactMatch);
+        setFilteredProducts([exactMatch]);
+        setShowDropdown(true);
+        setHighlightedIndex(0);
         return;
       }
 
@@ -256,24 +299,7 @@ export default function PosPage() {
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [searchTerm, products, selectProduct]);
-
-  // ── Fetch pricing when product + priceList change ──
-  useEffect(() => {
-    if (!selectedProduct || !selectedPriceListId) {
-      setPricing(null);
-      return;
-    }
-
-    trpc.ventas.getProductPrice
-      .query({
-        productId: selectedProduct.id,
-        priceListId: selectedPriceListId,
-        accountId: accountId ?? "",
-      })
-      .then((p: any) => setPricing(p))
-      .catch(() => setPricing(null));
-  }, [selectedProduct, selectedPriceListId]);
+  }, [searchTerm, products]);
 
   // ── Update origin when price list changes ──
   useEffect(() => {
@@ -304,16 +330,16 @@ export default function PosPage() {
     } else if (e.key === "Enter") {
       e.preventDefault();
 
-      // 1. Hay ítem resaltado con flechas → seleccionarlo
+      // 1. Hay ítem resaltado con flechas → agregarlo al carrito
       if (highlightedIndex >= 0 && highlightedIndex < filteredProducts.length) {
-        selectProduct(filteredProducts[highlightedIndex]);
+        void addProductToCart(filteredProducts[highlightedIndex]);
         return;
       }
 
-      // 2. Dropdown visible con resultados → seleccionar el primero
+      // 2. Dropdown visible con resultados → agregar el primero
       //    (scanner mandó Enter rápido antes de que el usuario navegue)
       if (showDropdown && filteredProducts.length > 0) {
-        selectProduct(filteredProducts[0]);
+        void addProductToCart(filteredProducts[0]);
         return;
       }
 
@@ -322,7 +348,7 @@ export default function PosPage() {
         const term = normalizeText(searchTerm);
         const results = products.filter((p) => matchesSearch(p, term));
         if (results.length === 1) {
-          selectProduct(results[0]);
+          void addProductToCart(results[0]);
         } else if (results.length > 1) {
           setFilteredProducts(results.slice(0, 10));
           setShowDropdown(true);
@@ -350,28 +376,25 @@ export default function PosPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // ── Live calculations ──
-  const qty = parseFloat(quantity) || 0;
-  const discount = parseFloat(discountPct) || 0;
-  const unitPrice = pricing?.salePrice ?? 0;
-  const unitCost = pricing?.unitCost ?? 0;
-  const subtotal = unitPrice * qty * (1 - discount / 100);
-  const variableCostTotal = unitCost * qty;
-  const contributionMargin = subtotal - variableCostTotal;
-  const marginPct = subtotal > 0 ? (contributionMargin / subtotal) * 100 : 0;
-
   const cartTotal = cart.reduce((sum, it) => sum + it.subtotal, 0);
+  const cartTotalWithIva = isRI ? cartTotal * (1 + ivaRate / 100) : cartTotal;
   const cartCostTotal = cart.reduce((sum, it) => sum + it.variableCostTotal, 0);
   const cartContribution = cart.reduce((sum, it) => sum + it.contributionMargin, 0);
   const cartMarginPct = cartTotal > 0 ? (cartContribution / cartTotal) * 100 : 0;
+  const methodChannels = paymentChannels.filter(
+    (ch) => !ch.paymentMethodId || ch.paymentMethodId === paymentMethodId
+  );
+  const toGross = useCallback(
+    (net: number) => (isRI ? net * (1 + ivaRate / 100) : net),
+    [isRI, ivaRate]
+  );
 
   // ── Reset form ──
   const resetForm = useCallback(() => {
-    setSelectedProduct(null);
     setSearchTerm("");
-    setPricing(null);
-    setQuantity("1");
-    setDiscountPct("0");
+    setFilteredProducts([]);
+    setShowDropdown(false);
+    setHighlightedIndex(-1);
     setCart([]);
     setLastSale(null);
 
@@ -379,46 +402,87 @@ export default function PosPage() {
     setTimeout(() => searchInputRef.current?.focus(), 100);
   }, []);
 
-  const addCurrentToCart = useCallback(() => {
-    if (!selectedProduct || !pricing) {
-      toast.error("Seleccioná un producto");
-      return;
-    }
-    if (qty <= 0) {
-      toast.error("La cantidad debe ser mayor a 0");
-      return;
-    }
+  const addProductToCart = useCallback(
+    async (product: Product, qtyOverride?: number) => {
+      if (!selectedPriceListId || !accountId) return;
 
-    const newItem: CartItem = {
-      id: `${selectedProduct.id}-${Date.now()}-${Math.round(Math.random() * 1000)}`,
-      product: selectedProduct,
-      pricing,
-      quantity: qty,
-      discountPct: discount,
-      unitPrice,
-      subtotal,
-      variableCostTotal,
-      contributionMargin,
-      marginPct,
+      try {
+        const fetchedPricing = await trpc.ventas.getProductPrice.query({
+          productId: product.id,
+          priceListId: selectedPriceListId,
+          accountId,
+        });
+
+        const q = qtyOverride ?? 1;
+        const d = 0;
+        const up = fetchedPricing.salePrice;
+        const uc = fetchedPricing.unitCost;
+        const st = up * q * (1 - d / 100);
+        const costTotal = uc * q;
+        const cm = st - costTotal;
+        const mc = st > 0 ? (cm / st) * 100 : 0;
+
+        const newItem: CartItem = {
+          id: `${product.id}-${Date.now()}-${Math.round(Math.random() * 1000)}`,
+          product,
+          pricing: fetchedPricing,
+          quantity: q,
+          discountPct: d,
+          unitPrice: up,
+          subtotal: st,
+          variableCostTotal: costTotal,
+          contributionMargin: cm,
+          marginPct: mc,
+        };
+
+        setCart((prev) => [...prev, newItem]);
+        setRecentProducts((prev) => {
+          const soldProduct = { id: product.id, name: product.name };
+          const filtered = prev.filter((p) => p.id !== soldProduct.id);
+          return [soldProduct, ...filtered].slice(0, 5);
+        });
+
+        setSearchTerm("");
+        setFilteredProducts([]);
+        setShowDropdown(false);
+        setHighlightedIndex(-1);
+        setTimeout(() => searchInputRef.current?.focus(), 10);
+
+        if (product.currentStock <= 0) {
+          toast.warning(`NO TENÉS STOCK de ${product.name}`, {
+            description:
+              "La venta no se bloquea, pero revisá reposición en Egresos o Mercadería.",
+          });
+        } else {
+          toast.success("Artículo agregado al carrito");
+        }
+      } catch {
+        toast.error("No se pudo agregar el producto al carrito");
+      }
+    },
+    [selectedPriceListId, accountId]
+  );
+
+  const recalcCartItem = useCallback((it: CartItem, newQty: number): CartItem => {
+    const min = it.product.unit === "unidad" ? 1 : 0.1;
+    const qRaw = Math.max(min, newQty);
+    const q =
+      it.product.unit === "unidad"
+        ? Math.max(1, Math.round(qRaw))
+        : Math.round(qRaw * 10) / 10;
+    const subtotalValue = it.unitPrice * q * (1 - it.discountPct / 100);
+    const variableCostValue = it.pricing.unitCost * q;
+    const cmValue = subtotalValue - variableCostValue;
+    const mcValue = subtotalValue > 0 ? (cmValue / subtotalValue) * 100 : 0;
+    return {
+      ...it,
+      quantity: q,
+      subtotal: subtotalValue,
+      variableCostTotal: variableCostValue,
+      contributionMargin: cmValue,
+      marginPct: mcValue,
     };
-
-    setCart((prev) => [...prev, newItem]);
-    setRecentProducts((prev) => {
-      const soldProduct = { id: selectedProduct.id, name: selectedProduct.name };
-      const filtered = prev.filter((p) => p.id !== soldProduct.id);
-      return [soldProduct, ...filtered].slice(0, 5);
-    });
-
-    setSelectedProduct(null);
-    setSearchTerm("");
-    setPricing(null);
-    setQuantity("1");
-    setDiscountPct("0");
-    setShowDropdown(false);
-    setHighlightedIndex(-1);
-    setTimeout(() => searchInputRef.current?.focus(), 50);
-    toast.success("Artículo agregado al carrito");
-  }, [selectedProduct, pricing, qty, discount, unitPrice, subtotal, variableCostTotal, contributionMargin, marginPct]);
+  }, []);
 
   // ── Submit sale ──
   const handleConfirm = useCallback(async () => {
@@ -433,7 +497,9 @@ export default function PosPage() {
 
     setSubmitting(true);
     try {
-      let firstSale: any = null;
+      let firstSale: { id?: string } | null = null;
+      const batchSaleDate = new Date();
+      const ticketId = `pos-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
       for (let i = 0; i < cart.length; i++) {
         const item = cart[i];
@@ -442,17 +508,19 @@ export default function PosPage() {
           productId: item.product.id,
           categoryId: item.pricing.categoryId,
           priceListId: selectedPriceListId || null,
-          saleDate: new Date(),
+          saleDate: batchSaleDate,
           origin,
           unitPrice: item.unitPrice,
           quantity: item.quantity,
           discountPct: item.discountPct,
           invoiced: false,
+          notes: `[POS_TICKET:${ticketId}]`,
           payments: [
             {
               paymentMethodId,
-              amount: item.subtotal,
-              paymentDate: new Date(),
+              paymentChannelId: paymentChannelId || null,
+              amount: toGross(item.subtotal),
+              paymentDate: batchSaleDate,
             },
           ],
         });
@@ -463,7 +531,7 @@ export default function PosPage() {
       const methodName =
         paymentMethods.find((m) => m.id === paymentMethodId)?.name ?? "";
 
-      const totalSaleAmount = cart.reduce((sum, it) => sum + it.subtotal, 0);
+      const totalSaleAmount = cart.reduce((sum, it) => sum + toGross(it.subtotal), 0);
       const firstItem = cart[0];
 
       setLastSale({
@@ -473,7 +541,7 @@ export default function PosPage() {
             ? firstItem.product.name
             : `${firstItem.product.name} + ${cart.length - 1} ítem(s)`,
         quantity: firstItem.quantity,
-        unitPrice: firstItem.unitPrice,
+        unitPrice: toGross(firstItem.unitPrice),
         total: totalSaleAmount,
         paymentMethodName: methodName,
       });
@@ -497,7 +565,7 @@ export default function PosPage() {
         productId: firstItem.product.id,
         quantity: String(firstItem.quantity),
         paymentMethodId,
-        discountPct: String(firstItem.discountPct),
+        paymentChannelId,
       });
 
       // Update stock in local products list
@@ -520,12 +588,13 @@ export default function PosPage() {
           duration: 4000,
         }
       );
-    } catch (err: any) {
-      toast.error(err.message || "Error al registrar la venta");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al registrar la venta";
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
-  }, [cart, paymentMethodId, selectedPriceListId, origin, paymentMethods]);
+  }, [cart, paymentMethodId, paymentChannelId, selectedPriceListId, origin, paymentMethods, accountId, toGross]);
 
   // ── Ctrl+Enter shortcut to confirm sale ──
   useEffect(() => {
@@ -712,20 +781,15 @@ export default function PosPage() {
               <Button
                 variant="outline"
                 className="flex-1"
-                onClick={() => {
+                onClick={async () => {
                   const config = lastSaleConfig;
                   resetForm();
-                  setTimeout(() => {
-                    const product = products.find((p) => p.id === config.productId);
-                    if (product) {
-                      selectProduct(product);
-                      setTimeout(() => {
-                        setQuantity(config.quantity);
-                        setDiscountPct(config.discountPct);
-                        setPaymentMethodId(config.paymentMethodId);
-                      }, 50);
-                    }
-                  }, 50);
+                  setPaymentMethodId(config.paymentMethodId);
+                  setPaymentChannelId(config.paymentChannelId || "");
+                  const product = products.find((p) => p.id === config.productId);
+                  if (product) {
+                    await addProductToCart(product, Number(config.quantity) || 1);
+                  }
                 }}
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
@@ -818,12 +882,8 @@ export default function PosPage() {
                     return (
                       <button
                         key={rp.id}
-                        onClick={() => product && selectProduct(product)}
-                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors cursor-pointer ${
-                          selectedProduct?.id === rp.id
-                            ? "border-primary bg-primary/10 text-primary font-medium"
-                            : "border-border bg-muted hover:bg-accent text-foreground"
-                        }`}
+                        onClick={() => product && void addProductToCart(product)}
+                        className="text-xs px-2.5 py-1 rounded-full border border-border bg-muted hover:bg-accent text-foreground transition-colors cursor-pointer"
                       >
                         {rp.name.length > 22 ? rp.name.slice(0, 22) + "…" : rp.name}
                       </button>
@@ -845,13 +905,7 @@ export default function PosPage() {
                   type="text"
                   placeholder="Nombre o código de barras..."
                   value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    if (selectedProduct) {
-                      setSelectedProduct(null);
-                      setPricing(null);
-                    }
-                  }}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
                   onFocus={() => {
                     if (filteredProducts.length > 0 && searchTerm.trim()) {
@@ -876,7 +930,7 @@ export default function PosPage() {
                       className={`w-full text-left px-4 py-3 flex items-center justify-between hover:bg-muted/60 transition-colors ${
                         idx === highlightedIndex ? "bg-muted/60" : ""
                       } ${idx > 0 ? "border-t border-border" : ""}`}
-                      onClick={() => selectProduct(product)}
+                      onClick={() => void addProductToCart(product)}
                       onMouseEnter={() => setHighlightedIndex(idx)}
                     >
                       <div>
@@ -889,7 +943,7 @@ export default function PosPage() {
                       <div className="text-right">
                         <div className="font-mono text-sm font-medium">
                           {product.defaultPricing
-                            ? formatCurrency(product.defaultPricing.salePrice)
+                            ? formatCurrency(toGross(product.defaultPricing.salePrice))
                             : "--"}
                         </div>
                         <div
@@ -908,160 +962,14 @@ export default function PosPage() {
               )}
             </div>
 
-            {/* Selected product card */}
-            {selectedProduct && (
-              <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <Package className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <h3 className="text-base font-semibold text-foreground truncate">
-                        {selectedProduct.name}
-                      </h3>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1 ml-6">
-                      {selectedProduct.category.name}
-                      {selectedProduct.barcode &&
-                        ` · Cod: ${selectedProduct.barcode}`}
-                    </div>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="shrink-0 text-xs h-7 px-2 text-muted-foreground"
-                    onClick={() => {
-                      setSelectedProduct(null);
-                      setSearchTerm("");
-                      setPricing(null);
-                      searchInputRef.current?.focus();
-                    }}
-                  >
-                    Cambiar
-                  </Button>
-                </div>
+            <div className="text-xs text-muted-foreground rounded-md border border-dashed border-border px-3 py-2">
+              Enter agrega el producto resaltado. Click en un resultado también lo agrega directo.
+            </div>
 
-                <div className="grid grid-cols-4 gap-2 text-sm">
-                  <div className="bg-muted/60 rounded-lg p-2.5 text-center">
-                    <div className="text-muted-foreground text-xs mb-0.5">Stock</div>
-                    <div
-                      className={`font-mono font-bold text-sm ${
-                        selectedProduct.isLowStock
-                          ? "text-red-500"
-                          : "text-foreground"
-                      }`}
-                    >
-                      {selectedProduct.currentStock}
-                    </div>
-                  </div>
-                  <div className="bg-muted/60 rounded-lg p-2.5 text-center">
-                    <div className="text-muted-foreground text-xs mb-0.5">Costo</div>
-                    <div className="font-mono font-medium text-sm">
-                      {pricing ? formatCurrency(pricing.unitCost) : "--"}
-                    </div>
-                  </div>
-                  <div className="bg-muted/60 rounded-lg p-2.5 text-center">
-                    <div className="text-muted-foreground text-xs mb-0.5">PV Lista</div>
-                    <div className="font-mono font-bold text-sm text-primary">
-                      {pricing ? formatCurrency(pricing.salePrice) : "--"}
-                    </div>
-                  </div>
-                  <div className="bg-muted/60 rounded-lg p-2.5 text-center">
-                    <div className="text-muted-foreground text-xs mb-0.5">Markup</div>
-                    <div className="font-mono font-medium text-sm">
-                      {pricing ? `${pricing.markupPct}%` : "--"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Quantity + Discount */}
-            {selectedProduct && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="pos-qty" className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
-                    Cantidad
-                  </Label>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setQuantity((prev) => {
-                          const current = parseFloat(prev) || 0;
-                          const step = selectedProduct.unit === "unidad" ? 1 : 0.1;
-                          const min = selectedProduct.unit === "unidad" ? 1 : 0.1;
-                          return String(Math.max(min, current - step));
-                        })
-                      }
-                      className="h-11 w-11 text-base shrink-0 bg-background"
-                    >
-                      -
-                    </Button>
-                    <Input
-                      id="pos-qty"
-                      type="number"
-                      step={selectedProduct.unit === "unidad" ? "1" : "0.1"}
-                      min={selectedProduct.unit === "unidad" ? "1" : "0.1"}
-                      value={quantity}
-                      onChange={(e) => setQuantity(e.target.value)}
-                      className="text-center text-xl font-mono h-11 bg-background"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() =>
-                        setQuantity((prev) => {
-                          const current = parseFloat(prev) || 0;
-                          const step = selectedProduct.unit === "unidad" ? 1 : 0.1;
-                          return String(current + step);
-                        })
-                      }
-                      className="h-11 w-11 text-base shrink-0 bg-background"
-                    >
-                      +
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="pos-discount" className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
-                    Descuento %
-                  </Label>
-                  <Input
-                    id="pos-discount"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    max="100"
-                    value={discountPct}
-                    onChange={(e) => setDiscountPct(e.target.value)}
-                    className="text-center text-lg h-11 bg-background"
-                  />
-                </div>
-              </div>
-            )}
-
-            {selectedProduct && pricing && (
-              <Button
-                className="w-full h-11"
-                variant="secondary"
-                onClick={addCurrentToCart}
-                disabled={qty <= 0}
-              >
-                Agregar al carrito
-                <span className="ml-2 font-mono">{formatCurrency(subtotal)}</span>
-              </Button>
-            )}
-
-            {/* Placeholder when no product selected */}
-            {!selectedProduct && (
-              <div className="flex flex-col items-center justify-center py-12 text-center">
-                <Package className="w-10 h-10 text-muted-foreground/40 mb-3" />
-                <p className="text-sm text-muted-foreground">Buscá un producto para comenzar</p>
-              </div>
-            )}
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Package className="w-10 h-10 text-muted-foreground/40 mb-3" />
+              <p className="text-sm text-muted-foreground">Buscá o escaneá para agregar al carrito</p>
+            </div>
         </div>
 
         {/* Right panel — totals + payment + confirm */}
@@ -1081,12 +989,62 @@ export default function PosPage() {
                           <div className="min-w-0">
                             <p className="text-sm font-medium truncate">{it.product.name}</p>
                             <p className="text-xs text-muted-foreground">
-                              {it.quantity} x {formatCurrency(it.unitPrice)}
+                              {formatQuantity(it.quantity, it.product.unit)} {it.product.unit} x {formatCurrency(toGross(it.unitPrice))}
                               {it.discountPct > 0 ? ` · desc ${it.discountPct}%` : ""}
                             </p>
+                            <div className="mt-2 inline-flex items-center gap-1.5">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => {
+                                  const step = it.product.unit === "unidad" ? 1 : 0.1;
+                                  setCart((prev) =>
+                                    prev.map((x) =>
+                                      x.id === it.id ? recalcCartItem(x, x.quantity - step) : x
+                                    )
+                                  );
+                                }}
+                              >
+                                -
+                              </Button>
+                              <Input
+                                type="number"
+                                step={it.product.unit === "unidad" ? "1" : "0.1"}
+                                min={it.product.unit === "unidad" ? "1" : "0.1"}
+                                value={formatQuantity(it.quantity, it.product.unit)}
+                                onChange={(e) => {
+                                  const parsed = parseFloat(e.target.value);
+                                  if (Number.isNaN(parsed)) return;
+                                  setCart((prev) =>
+                                    prev.map((x) =>
+                                      x.id === it.id ? recalcCartItem(x, parsed) : x
+                                    )
+                                  );
+                                }}
+                                className="h-7 w-20 text-center text-xs font-mono"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => {
+                                  const step = it.product.unit === "unidad" ? 1 : 0.1;
+                                  setCart((prev) =>
+                                    prev.map((x) =>
+                                      x.id === it.id ? recalcCartItem(x, x.quantity + step) : x
+                                    )
+                                  );
+                                }}
+                              >
+                                +
+                              </Button>
+                            </div>
                           </div>
                           <div className="text-right shrink-0">
-                            <p className="font-mono text-sm font-semibold">{formatCurrency(it.subtotal)}</p>
+                            <p className="font-mono text-sm font-semibold">{formatCurrency(toGross(it.subtotal))}</p>
                             <button
                               type="button"
                               className="text-[11px] text-muted-foreground hover:text-destructive inline-flex items-center gap-1"
@@ -1105,7 +1063,7 @@ export default function PosPage() {
                     <div className="flex justify-between items-baseline">
                       <span className="text-sm font-medium text-muted-foreground">Total</span>
                       <span className="text-3xl font-bold text-foreground font-mono">
-                        {formatCurrency(cartTotal)}
+                        {formatCurrency(cartTotalWithIva)}
                       </span>
                     </div>
                   </div>
@@ -1145,7 +1103,10 @@ export default function PosPage() {
                     </Label>
                     <Select
                       value={paymentMethodId}
-                      onValueChange={setPaymentMethodId}
+                      onValueChange={(value) => {
+                        setPaymentMethodId(value);
+                        setPaymentChannelId("");
+                      }}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Seleccionar..." />
@@ -1162,6 +1123,31 @@ export default function PosPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {methodChannels.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
+                        Canal / Cuenta
+                      </Label>
+                      <Select
+                        value={paymentChannelId || "none"}
+                        onValueChange={(v) => setPaymentChannelId(v === "none" ? "" : v)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Seleccionar canal..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Canal automático</SelectItem>
+                          {methodChannels.map((ch) => (
+                            <SelectItem key={ch.id} value={ch.id}>
+                              {ch.name}
+                              {ch.paymentAccount?.name ? ` · ${ch.paymentAccount.name}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-sm py-12 text-center gap-2">
@@ -1186,7 +1172,7 @@ export default function PosPage() {
                     Confirmar Venta
                     {cart.length > 0 && (
                       <span className="ml-2 opacity-75 text-sm font-normal">
-                        {formatCurrency(cartTotal)}
+                        {formatCurrency(cartTotalWithIva)}
                       </span>
                     )}
                   </>

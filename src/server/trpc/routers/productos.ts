@@ -374,7 +374,7 @@ export const productosRouter = router({
   update: publicProcedure
     .input(updateProductSchema)
     .mutation(async ({ input }) => {
-      const { id, ...fields } = input;
+      const { id, effectiveDate, ...fields } = input;
 
       const current = await db.product.findUnique({ where: { id } });
       if (!current) {
@@ -408,7 +408,7 @@ export const productosRouter = router({
         fields.laborCost !== undefined ||
         fields.packagingCost !== undefined;
 
-      return db.product.update({
+      const updated = await db.product.update({
         where: { id },
         data: {
           ...(fields.categoryId !== undefined && {
@@ -444,6 +444,25 @@ export const productosRouter = router({
           ...(costChanged && { lastCostUpdate: new Date() }),
         },
       });
+
+      // Snapshot de costo con vigencia (no afecta stock: quantity 0)
+      if (costChanged) {
+        const unitCost = calcUnitCost(updated);
+        await db.stockMovement.create({
+          data: {
+            accountId: updated.accountId,
+            productId: updated.id,
+            movementType: "adjustment",
+            quantity: 0,
+            unitCost,
+            referenceType: "adjustment",
+            movementDate: effectiveDate ?? new Date(),
+            notes: "[COST_UPDATE] Actualización de costo",
+          },
+        });
+      }
+
+      return updated;
     }),
 
   // ——————————————————————————————

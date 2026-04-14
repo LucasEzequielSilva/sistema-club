@@ -62,6 +62,19 @@ type SaleListItem = {
   marginPct: number;
   totalPaid: number;
   pendingAmount: number;
+  payments: {
+    id: string;
+    amount: number;
+    paymentMethod: { id: string; name: string };
+    paymentChannel?: { id: string; name: string; feePct?: number } | null;
+    paymentAccount?: { id: string; name: string } | null;
+  }[];
+};
+
+type PaymentMethodRow = {
+  id: string;
+  name: string;
+  isActive: boolean;
 };
 
 type SummaryData = {
@@ -133,10 +146,30 @@ function formatDate(d: Date | string) {
   });
 }
 
+function defaultOnePayFee(methodName: string): number {
+  const name = methodName.toLowerCase();
+  if (name.includes("efectivo") || name.includes("transfer")) return 0;
+  if (name.includes("debito") || name.includes("débito")) return 1.5;
+  if (name.includes("mercado pago") || name.includes("mp")) return 5;
+  if (name.includes("credito") || name.includes("crédito") || name.includes("tarjeta")) return 7;
+  return 0;
+}
+
 function toInputDate(d: Date | null): string {
   if (!d) return "";
   const dt = new Date(d);
   return dt.toISOString().split("T")[0];
+}
+
+function getPosTicketId(notes?: string | null): string | null {
+  if (!notes) return null;
+  const m = notes.match(/\[POS_TICKET:([^\]]+)\]/);
+  return m?.[1] ?? null;
+}
+
+function mergeStatus(current: string, next: string): string {
+  const weight: Record<string, number> = { overdue: 4, partial: 3, pending: 2, paid: 1 };
+  return (weight[next] ?? 0) > (weight[current] ?? 0) ? next : current;
 }
 
 export default function VentasPage() {
@@ -145,6 +178,11 @@ export default function VentasPage() {
   const [sales, setSales] = useState<SaleListItem[]>([]);
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeView, setActiveView] = useState<"ventas" | "rentabilidad">("ventas");
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodRow[]>([]);
+  const [onePayFeePct, setOnePayFeePct] = useState<Record<string, number>>({});
+  const [installmentFeePct, setInstallmentFeePct] = useState<Record<string, number>>({});
+  const [absorbInstallments, setAbsorbInstallments] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -167,7 +205,12 @@ export default function VentasPage() {
     if (!accountId) return;
     setLoading(true);
     try {
-      const params: any = {
+      const params: {
+        accountId: string;
+        status?: string;
+        dateFrom?: Date;
+        dateTo?: Date;
+      } = {
         accountId,
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(dateFrom && { dateFrom: new Date(dateFrom) }),
@@ -175,7 +218,7 @@ export default function VentasPage() {
           dateTo: new Date(dateTo + "T23:59:59"),
         }),
       };
-      const [result, summaryResult] = await Promise.all([
+      const [result, summaryResult, methodsResult] = await Promise.all([
         trpc.ventas.list.query(params),
         trpc.ventas.getSummary.query({
           accountId,
@@ -184,9 +227,30 @@ export default function VentasPage() {
             dateTo: new Date(dateTo + "T23:59:59"),
           }),
         }),
+        trpc.clasificaciones.listPaymentMethods.query({ accountId }),
       ]);
       setSales(result as SaleListItem[]);
       setSummary(summaryResult);
+
+      const methods = (methodsResult as PaymentMethodRow[])
+        .filter((m) => m.isActive)
+        .map((m) => ({ id: m.id, name: m.name, isActive: m.isActive }));
+      setPaymentMethods(methods);
+
+      setOnePayFeePct((prev) => {
+        const next = { ...prev };
+        for (const m of methods) {
+          if (next[m.id] === undefined) next[m.id] = defaultOnePayFee(m.name);
+        }
+        return next;
+      });
+      setInstallmentFeePct((prev) => {
+        const next = { ...prev };
+        for (const m of methods) {
+          if (next[m.id] === undefined) next[m.id] = 0;
+        }
+        return next;
+      });
     } catch {
       toast.error("Error al cargar las ventas");
     } finally {
@@ -199,14 +263,39 @@ export default function VentasPage() {
     return () => clearTimeout(timer);
   }, [loadSales]);
 
+  useEffect(() => {
+    if (!accountId) return;
+    try {
+      const raw = localStorage.getItem(`sc_fee_config_${accountId}`);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (parsed?.onePayFeePct) setOnePayFeePct(parsed.onePayFeePct);
+      if (parsed?.installmentFeePct) setInstallmentFeePct(parsed.installmentFeePct);
+      if (typeof parsed?.absorbInstallments === "boolean") {
+        setAbsorbInstallments(parsed.absorbInstallments);
+      }
+    } catch {
+      // ignore invalid local data
+    }
+  }, [accountId]);
+
+  useEffect(() => {
+    if (!accountId) return;
+    localStorage.setItem(
+      `sc_fee_config_${accountId}`,
+      JSON.stringify({ onePayFeePct, installmentFeePct, absorbInstallments })
+    );
+  }, [accountId, onePayFeePct, installmentFeePct, absorbInstallments]);
+
   const handleDelete = async (id: string) => {
     if (!(await confirmDelete())) return;
     try {
       await trpc.ventas.delete.mutate({ id });
       toast.success("Venta eliminada");
       loadSales();
-    } catch (err: any) {
-      toast.error(err.message || "Error al eliminar");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error al eliminar";
+      toast.error(message);
     }
   };
 
@@ -224,6 +313,65 @@ export default function VentasPage() {
 
   const hasFilters = statusFilter !== "all" || dateFrom || dateTo;
 
+  const ticketRows = (() => {
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        saleIds: string[];
+        saleDate: Date;
+        productNames: Set<string>;
+        clientNames: Set<string>;
+        quantity: number;
+        subtotal: number;
+        total: number;
+        contributionMargin: number;
+        status: string;
+        invoicedCount: number;
+        salesCount: number;
+        origin: string;
+        priceListName: string;
+      }
+    >();
+
+    for (const s of sales) {
+      const ticket = getPosTicketId(s.notes) ?? `single-${s.id}`;
+      const current = groups.get(ticket) ?? {
+        key: ticket,
+        saleIds: [],
+        saleDate: new Date(s.saleDate),
+        productNames: new Set<string>(),
+        clientNames: new Set<string>(),
+        quantity: 0,
+        subtotal: 0,
+        total: 0,
+        contributionMargin: 0,
+        status: s.status,
+        invoicedCount: 0,
+        salesCount: 0,
+        origin: s.origin,
+        priceListName: s.priceList?.name ?? "",
+      };
+
+      current.saleIds.push(s.id);
+      if (new Date(s.saleDate) > current.saleDate) current.saleDate = new Date(s.saleDate);
+      current.productNames.add(s.product.name);
+      if (s.client?.name) current.clientNames.add(s.client.name);
+      current.quantity += s.quantity;
+      current.subtotal += s.subtotal;
+      current.total += s.total;
+      current.contributionMargin += s.contributionMargin;
+      current.status = mergeStatus(current.status, s.status);
+      current.invoicedCount += s.invoiced ? 1 : 0;
+      current.salesCount += 1;
+      groups.set(ticket, current);
+    }
+
+    return Array.from(groups.values()).sort(
+      (a, b) => new Date(b.saleDate).getTime() - new Date(a.saleDate).getTime()
+    );
+  })();
+
   const totalFacturadoMonto = sales
     .filter((s) => s.invoiced)
     .reduce((sum, s) => sum + s.total, 0);
@@ -234,6 +382,129 @@ export default function VentasPage() {
   const pctFacturado = totalMontoVentas > 0 ? (totalFacturadoMonto / totalMontoVentas) * 100 : 0;
   const pctNoFacturado = totalMontoVentas > 0 ? (totalNoFacturadoMonto / totalMontoVentas) * 100 : 0;
   const avgMcPct = sales.length > 0 ? sales.reduce((sum, s) => sum + s.marginPct, 0) / sales.length : 0;
+
+  const profitabilityByMethod = paymentMethods.map((method) => {
+    let collected = 0;
+    let grossContribution = 0;
+    let paymentsCount = 0;
+    const productNames = new Set<string>();
+
+    for (const sale of sales) {
+      const saleTotal = sale.total || 0;
+      for (const p of sale.payments || []) {
+        if (p.paymentMethod.id !== method.id) continue;
+        const amount = p.amount || 0;
+        const contributionShare =
+          saleTotal > 0 ? (sale.contributionMargin * amount) / saleTotal : 0;
+        collected += amount;
+        grossContribution += contributionShare;
+        paymentsCount += 1;
+        productNames.add(sale.product.name);
+      }
+    }
+
+    const onePayPct = onePayFeePct[method.id] ?? defaultOnePayFee(method.name);
+    const installmentPct = absorbInstallments ? installmentFeePct[method.id] ?? 0 : 0;
+    const totalFeePct = onePayPct + installmentPct;
+    const feeCost = collected * (totalFeePct / 100);
+    const netContribution = grossContribution - feeCost;
+    const netMarginPct = collected > 0 ? (netContribution / collected) * 100 : 0;
+
+    return {
+      methodId: method.id,
+      methodName: method.name,
+      paymentsCount,
+      productsCount: productNames.size,
+      productsPreview: Array.from(productNames).slice(0, 3).join(", "),
+      collected,
+      onePayPct,
+      installmentPct,
+      totalFeePct,
+      feeCost,
+      grossContribution,
+      netContribution,
+      netMarginPct,
+    };
+  });
+
+  const profitabilityTotals = profitabilityByMethod.reduce(
+    (acc, row) => {
+      acc.collected += row.collected;
+      acc.feeCost += row.feeCost;
+      acc.grossContribution += row.grossContribution;
+      acc.netContribution += row.netContribution;
+      return acc;
+    },
+    { collected: 0, feeCost: 0, grossContribution: 0, netContribution: 0 }
+  );
+
+  const profitabilityByChannelMap = new Map<
+    string,
+    {
+      channelId: string;
+      channelName: string;
+      accountName: string;
+      paymentsCount: number;
+      collected: number;
+      grossContribution: number;
+      feeCost: number;
+      netContribution: number;
+      products: Set<string>;
+    }
+  >();
+
+  for (const sale of sales) {
+    const saleTotal = sale.total || 0;
+    for (const p of sale.payments || []) {
+      const channelId = p.paymentChannel?.id ?? "no-channel";
+      const channelName = p.paymentChannel?.name ?? "Sin canal";
+      const accountName = p.paymentAccount?.name ?? "Sin cuenta";
+      const amount = p.amount || 0;
+      const contributionShare =
+        saleTotal > 0 ? (sale.contributionMargin * amount) / saleTotal : 0;
+
+      let feePct = 0;
+      if (p.paymentChannel?.id) {
+        feePct = p.paymentChannel?.feePct ?? 0;
+      } else {
+        const one = onePayFeePct[p.paymentMethod.id] ?? defaultOnePayFee(p.paymentMethod.name);
+        const inst = absorbInstallments ? installmentFeePct[p.paymentMethod.id] ?? 0 : 0;
+        feePct = one + inst;
+      }
+
+      const feeCost = amount * (feePct / 100);
+
+      const current = profitabilityByChannelMap.get(channelId) ?? {
+        channelId,
+        channelName,
+        accountName,
+        paymentsCount: 0,
+        collected: 0,
+        grossContribution: 0,
+        feeCost: 0,
+        netContribution: 0,
+        products: new Set<string>(),
+      };
+
+      current.paymentsCount += 1;
+      current.collected += amount;
+      current.grossContribution += contributionShare;
+      current.feeCost += feeCost;
+      current.netContribution += contributionShare - feeCost;
+      current.products.add(sale.product.name);
+
+      profitabilityByChannelMap.set(channelId, current);
+    }
+  }
+
+  const profitabilityByChannel = Array.from(profitabilityByChannelMap.values())
+    .map((row) => ({
+      ...row,
+      productsCount: row.products.size,
+      productsPreview: Array.from(row.products).slice(0, 3).join(", "),
+      netMarginPct: row.collected > 0 ? (row.netContribution / row.collected) * 100 : 0,
+    }))
+    .sort((a, b) => b.collected - a.collected);
 
   const exportCSV = () => {
     if (sales.length === 0) return;
@@ -393,7 +664,184 @@ export default function VentasPage() {
         </div>
       )}
 
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant={activeView === "ventas" ? "default" : "outline"}
+          onClick={() => setActiveView("ventas")}
+        >
+          Ventas
+        </Button>
+        <Button
+          size="sm"
+          variant={activeView === "rentabilidad" ? "default" : "outline"}
+          onClick={() => setActiveView("rentabilidad")}
+        >
+          Rentabilidad por cobro
+        </Button>
+      </div>
+
+      {activeView === "rentabilidad" && (
+      <div className="space-y-4">
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">
+              Rentabilidad por medio de cobro
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Segmenta productos vendidos por medio de cobro y estima impacto de comisiones.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={absorbInstallments}
+              onChange={(e) => setAbsorbInstallments(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Absorber comisión de cuotas
+          </label>
+        </div>
+
+        <div className="overflow-auto">
+          <table className="w-full min-w-[1080px] text-sm">
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th className="text-left py-2">Medio de cobro</th>
+                <th className="text-left py-2">Productos vendidos</th>
+                <th className="text-right py-2">Cobros</th>
+                <th className="text-right py-2">Monto cobrado</th>
+                <th className="text-right py-2">Comisión 1 pago %</th>
+                <th className="text-right py-2">Comisión cuotas %</th>
+                <th className="text-right py-2">Costo por cobrar</th>
+                <th className="text-right py-2">CM bruto</th>
+                <th className="text-right py-2">CM neto</th>
+                <th className="text-right py-2">Margen neto %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profitabilityByMethod.map((row) => (
+                <tr key={row.methodId} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 font-medium">{row.methodName}</td>
+                  <td className="py-2 text-xs text-muted-foreground">
+                    {row.productsCount > 0
+                      ? `${row.productsCount} producto(s)${row.productsPreview ? ` · ${row.productsPreview}` : ""}`
+                      : "—"}
+                  </td>
+                  <td className="py-2 text-right font-mono">{row.paymentsCount}</td>
+                  <td className="py-2 text-right font-mono">{formatCurrency(row.collected)}</td>
+                  <td className="py-2 text-right">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      className="w-[96px] ml-auto text-right"
+                      value={String(onePayFeePct[row.methodId] ?? defaultOnePayFee(row.methodName))}
+                      onChange={(e) =>
+                        setOnePayFeePct((prev) => ({
+                          ...prev,
+                          [row.methodId]: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </td>
+                  <td className="py-2 text-right">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      className="w-[96px] ml-auto text-right"
+                      value={String(installmentFeePct[row.methodId] ?? 0)}
+                      onChange={(e) =>
+                        setInstallmentFeePct((prev) => ({
+                          ...prev,
+                          [row.methodId]: parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                    />
+                  </td>
+                  <td className="py-2 text-right font-mono">{formatCurrency(row.feeCost)}</td>
+                  <td className="py-2 text-right font-mono">{formatCurrency(row.grossContribution)}</td>
+                  <td className="py-2 text-right font-mono font-semibold">{formatCurrency(row.netContribution)}</td>
+                  <td className="py-2 text-right font-mono">{row.netMarginPct.toFixed(2)}%</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t border-border font-semibold">
+                <td className="py-2">Total</td>
+                <td className="py-2" />
+                <td className="py-2" />
+                <td className="py-2 text-right font-mono">{formatCurrency(profitabilityTotals.collected)}</td>
+                <td className="py-2" />
+                <td className="py-2" />
+                <td className="py-2 text-right font-mono">{formatCurrency(profitabilityTotals.feeCost)}</td>
+                <td className="py-2 text-right font-mono">{formatCurrency(profitabilityTotals.grossContribution)}</td>
+                <td className="py-2 text-right font-mono">{formatCurrency(profitabilityTotals.netContribution)}</td>
+                <td className="py-2 text-right font-mono">
+                  {profitabilityTotals.collected > 0
+                    ? `${((profitabilityTotals.netContribution / profitabilityTotals.collected) * 100).toFixed(2)}%`
+                    : "0.00%"}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-border bg-card p-4 space-y-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">
+            Rentabilidad por canal / cuenta receptora
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Usa comisión del canal cuando existe; si no, cae a la comisión configurada del método.
+          </p>
+        </div>
+
+        <div className="overflow-auto">
+          <table className="w-full min-w-[980px] text-sm">
+            <thead>
+              <tr className="border-b border-border text-muted-foreground">
+                <th className="text-left py-2">Canal</th>
+                <th className="text-left py-2">Cuenta</th>
+                <th className="text-left py-2">Productos vendidos</th>
+                <th className="text-right py-2">Cobros</th>
+                <th className="text-right py-2">Monto cobrado</th>
+                <th className="text-right py-2">Costo por cobrar</th>
+                <th className="text-right py-2">CM bruto</th>
+                <th className="text-right py-2">CM neto</th>
+                <th className="text-right py-2">Margen neto %</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profitabilityByChannel.map((row) => (
+                <tr key={row.channelId} className="border-b border-border/60 last:border-0">
+                  <td className="py-2 font-medium">{row.channelName}</td>
+                  <td className="py-2 text-muted-foreground">{row.accountName}</td>
+                  <td className="py-2 text-xs text-muted-foreground">
+                    {row.productsCount > 0
+                      ? `${row.productsCount} producto(s)${row.productsPreview ? ` · ${row.productsPreview}` : ""}`
+                      : "—"}
+                  </td>
+                  <td className="py-2 text-right font-mono">{row.paymentsCount}</td>
+                  <td className="py-2 text-right font-mono">{formatCurrency(row.collected)}</td>
+                  <td className="py-2 text-right font-mono">{formatCurrency(row.feeCost)}</td>
+                  <td className="py-2 text-right font-mono">{formatCurrency(row.grossContribution)}</td>
+                  <td className="py-2 text-right font-mono font-semibold">{formatCurrency(row.netContribution)}</td>
+                  <td className="py-2 text-right font-mono">{row.netMarginPct.toFixed(2)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      </div>
+      )}
+
       {/* Filter Bar */}
+      {activeView === "ventas" && (
       <div className="flex flex-wrap items-center gap-3 p-3 bg-muted/50 rounded-lg border border-border">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Desde:</span>
@@ -433,9 +881,10 @@ export default function VentasPage() {
           </Button>
         )}
       </div>
+      )}
 
       {/* Table */}
-      {loading ? (
+      {activeView === "ventas" && (loading ? (
         <div className="rounded-lg border border-border overflow-hidden">
           <div className="bg-muted/30 px-4 py-3 border-b border-border">
             <div className="grid grid-cols-10 gap-3 animate-pulse">
@@ -459,7 +908,7 @@ export default function VentasPage() {
             </div>
           ))}
         </div>
-      ) : sales.length === 0 ? (
+      ) : ticketRows.length === 0 ? (
         hasFilters ? (
           <div className="rounded-xl border border-border bg-card">
             <EmptyState
@@ -485,10 +934,10 @@ export default function VentasPage() {
         <div className="rounded-xl border border-border overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground">Producto</TableHead>
-                <TableHead className="text-xs uppercase text-muted-foreground">Cliente</TableHead>
+                <TableRow>
+                  <TableHead className="text-xs uppercase text-muted-foreground">Fecha</TableHead>
+                  <TableHead className="text-xs uppercase text-muted-foreground">Ticket</TableHead>
+                  <TableHead className="text-xs uppercase text-muted-foreground">Cliente</TableHead>
                 <TableHead className="text-center text-xs uppercase text-muted-foreground">Cant.</TableHead>
                 <TableHead className="text-right text-xs uppercase text-muted-foreground">Subtotal</TableHead>
                 <TableHead className="text-right text-xs uppercase text-muted-foreground">Total</TableHead>
@@ -499,45 +948,51 @@ export default function VentasPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sales.map((s) => {
-                const badgeStyle = STATUS_BADGE_STYLE[s.status] || STATUS_BADGE_STYLE.pending;
-                const cfg = STATUS_CONFIG[s.status] || STATUS_CONFIG.pending;
+              {ticketRows.map((t) => {
+                const firstSaleId = t.saleIds[0];
+                const badgeStyle = STATUS_BADGE_STYLE[t.status] || STATUS_BADGE_STYLE.pending;
+                const cfg = STATUS_CONFIG[t.status] || STATUS_CONFIG.pending;
+                const productsPreview = Array.from(t.productNames).slice(0, 2).join(", ");
+                const isSingle = t.salesCount === 1;
                 return (
-                  <TableRow key={s.id} className="hover:bg-muted/40">
+                  <TableRow key={t.key} className="hover:bg-muted/40">
                     <TableCell className="text-sm">
                       <div
                         className="cursor-pointer hover:underline text-foreground"
-                        onClick={() => setDetailId(s.id)}
+                        onClick={() => setDetailId(firstSaleId)}
                       >
-                        {formatDate(s.saleDate)}
+                        {formatDate(t.saleDate)}
                       </div>
                     </TableCell>
                     <TableCell>
                       <div
                         className="cursor-pointer hover:underline"
-                        onClick={() => setDetailId(s.id)}
+                        onClick={() => setDetailId(firstSaleId)}
                       >
-                        <span className="font-medium text-foreground">{s.product.name}</span>
+                        <span className="font-medium text-foreground">
+                          {isSingle ? productsPreview : `${t.salesCount} ítems`}
+                        </span>
                         <div className="text-xs text-muted-foreground">
-                          {s.origin === "mayorista" ? "Mayorista" : "Minorista"}
-                          {s.priceList && ` | ${s.priceList.name}`}
+                          {isSingle ? productsPreview : `${productsPreview}${t.productNames.size > 2 ? "…" : ""}`}
+                          {` | ${t.origin === "mayorista" ? "Mayorista" : "Minorista"}`}
+                          {t.priceListName ? ` | ${t.priceListName}` : ""}
                         </div>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {s.client?.name || "—"}
+                      {t.clientNames.size > 0 ? Array.from(t.clientNames).join(", ") : "—"}
                     </TableCell>
                     <TableCell className="text-center font-mono text-sm text-foreground">
-                      {s.quantity}
+                      {t.quantity}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm text-foreground">
-                      {formatCurrency(s.subtotal)}
+                      {formatCurrency(t.subtotal)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
-                      {formatCurrency(s.total)}
+                      {formatCurrency(t.total)}
                     </TableCell>
                     <TableCell className="text-right font-mono text-sm font-semibold text-foreground">
-                      {formatCurrency(s.contributionMargin)}
+                      {formatCurrency(t.contributionMargin)}
                     </TableCell>
                     <TableCell className="text-center">
                       <span
@@ -548,8 +1003,10 @@ export default function VentasPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-center text-foreground">
-                      {s.invoiced ? (
+                      {t.invoicedCount === t.salesCount ? (
                         <span style={{ color: "var(--success-muted-foreground)" }}>&#10003;</span>
+                      ) : t.invoicedCount > 0 ? (
+                        <span className="text-amber-500">~</span>
                       ) : (
                         <span className="text-muted-foreground">&#10007;</span>
                       )}
@@ -563,15 +1020,15 @@ export default function VentasPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setDetailId(s.id)}>
+                          <DropdownMenuItem onClick={() => setDetailId(firstSaleId)}>
                             Ver detalle
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => setDetailId(s.id)}>
+                          <DropdownMenuItem onClick={() => setDetailId(firstSaleId)}>
                             Agregar cobro
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
-                            onClick={() => handleDelete(s.id)}
+                            onClick={() => handleDelete(firstSaleId)}
                           >
                             Eliminar
                           </DropdownMenuItem>
@@ -584,7 +1041,7 @@ export default function VentasPage() {
             </TableBody>
           </Table>
         </div>
-      )}
+      ))}
 
       <SaleDialog
         open={showDialog}

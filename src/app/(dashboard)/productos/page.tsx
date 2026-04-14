@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { trpc } from "@/lib/trpc-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +37,12 @@ import { toast } from "sonner";
 import { Package, MoreHorizontal, Loader2 } from "lucide-react";
 import { useConfirm } from "@/hooks/use-confirm";
 import { useAccountId } from "@/hooks/use-account-id";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 const UNIT_LABELS: Record<string, string> = {
   unidad: "Unidad",
@@ -93,6 +100,7 @@ function getMarginClass(marginPct: number): string {
 
 export default function ProductosPage() {
   const { accountId } = useAccountId();
+  const router = useRouter();
   const [products, setProducts] = useState<ProductListItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -209,6 +217,9 @@ export default function ProductosPage() {
   const hasFilters =
     search || categoryFilter !== "all" || supplierFilter !== "all" || lowStockOnly;
 
+  const stockZeroCount = products.filter((p) => p.isActive && p.currentStock <= 0).length;
+  const stockLowCount = products.filter((p) => p.isActive && p.isLowStock).length;
+
   // If detail view is open, show it
   if (detailId) {
     return (
@@ -251,6 +262,35 @@ export default function ProductosPage() {
           </div>
         }
       />
+
+      {stockZeroCount > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-amber-900">
+              Tenés {stockZeroCount} producto(s) sin stock para vender.
+            </p>
+            <p className="text-xs text-amber-800">
+              Recomendado: registrá un egreso/compra para cargar stock y evitar ventas bloqueadas.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" onClick={() => router.push("/compras")}>
+              Ir a Egresos
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => router.push("/mercaderia")}>
+              Ir a Mercadería
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {stockZeroCount === 0 && stockLowCount > 0 && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+          <p className="text-sm text-orange-900">
+            Tenés {stockLowCount} producto(s) con stock bajo. Podés reponer desde <span className="font-semibold">Egresos</span> o <span className="font-semibold">Mercadería</span>.
+          </p>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border mb-4 flex-wrap">
@@ -354,6 +394,7 @@ export default function ProductosPage() {
           </div>
         )
       ) : (
+        <TooltipProvider>
         <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
@@ -415,16 +456,23 @@ export default function ProductosPage() {
                       <span className="font-mono text-sm">
                         {p.currentStock}
                       </span>
-                      {p.isLowStock && (
-                        <Badge
-                          variant="destructive"
-                          className="text-[10px] px-1.5"
-                        >
-                          Bajo
-                        </Badge>
-                      )}
-                    </div>
-                  </TableCell>
+                       {p.isLowStock && (
+                         <Tooltip>
+                           <TooltipTrigger asChild>
+                             <Badge
+                               variant="destructive"
+                               className="text-[10px] px-1.5 cursor-help"
+                             >
+                               Bajo
+                             </Badge>
+                           </TooltipTrigger>
+                           <TooltipContent side="top">
+                             Reponé stock desde Egresos o Mercadería.
+                           </TooltipContent>
+                         </Tooltip>
+                       )}
+                     </div>
+                   </TableCell>
                   <TableCell className="text-center">
                     {p.isActive ? (
                       <Badge variant="outline" className="text-[var(--success-muted-foreground)] border-[var(--success-muted-foreground)]/30 bg-[var(--success-muted-foreground)]/10">
@@ -484,6 +532,7 @@ export default function ProductosPage() {
             </TableBody>
           </Table>
         </div>
+        </TooltipProvider>
       )}
 
       <ProductDialog

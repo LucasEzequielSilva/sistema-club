@@ -16,8 +16,7 @@ import {
 function derivePurchaseStatus(
   totalPaid: number,
   purchaseTotal: number,
-  dueDate: Date | null | undefined,
-  currentStatus: string
+  dueDate: Date | null | undefined
 ): string {
   if (totalPaid >= purchaseTotal) return "paid";
   if (dueDate && new Date(dueDate) < new Date() && totalPaid < purchaseTotal) {
@@ -47,6 +46,106 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+async function resolvePaymentRouting(input: {
+  accountId: string;
+  paymentMethodId: string;
+  paymentChannelId?: string | null;
+  paymentAccountId?: string | null;
+}) {
+  const method = await db.paymentMethod.findFirst({
+    where: {
+      id: input.paymentMethodId,
+      accountId: input.accountId,
+    },
+  });
+
+  if (!method) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Método de pago no encontrado",
+    });
+  }
+
+  let paymentChannelId: string | null = null;
+  let paymentAccountId: string | null = input.paymentAccountId ?? null;
+  let accreditationDays = method.accreditationDays;
+
+  if (input.paymentChannelId) {
+    const channel = await db.paymentChannel.findFirst({
+      where: {
+        id: input.paymentChannelId,
+        accountId: input.accountId,
+      },
+    });
+
+    if (!channel) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Canal de pago no encontrado",
+      });
+    }
+
+    if (channel.paymentMethodId && channel.paymentMethodId !== method.id) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "El canal no corresponde al método de pago seleccionado",
+      });
+    }
+
+    paymentChannelId = channel.id;
+    paymentAccountId = paymentAccountId ?? channel.paymentAccountId;
+    accreditationDays = channel.accreditationDays;
+  } else {
+    const defaultChannel = await db.paymentChannel.findFirst({
+      where: {
+        accountId: input.accountId,
+        paymentMethodId: method.id,
+        isActive: true,
+      },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+    });
+
+    if (defaultChannel) {
+      paymentChannelId = defaultChannel.id;
+      paymentAccountId = paymentAccountId ?? defaultChannel.paymentAccountId;
+      accreditationDays = defaultChannel.accreditationDays;
+    }
+  }
+
+  if (paymentAccountId) {
+    const account = await db.paymentAccount.findFirst({
+      where: {
+        id: paymentAccountId,
+        accountId: input.accountId,
+      },
+      select: { id: true },
+    });
+    if (!account) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Cuenta receptora no encontrada",
+      });
+    }
+  } else {
+    const defaultAccount = await db.paymentAccount.findFirst({
+      where: {
+        accountId: input.accountId,
+        isActive: true,
+      },
+      orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+      select: { id: true },
+    });
+    paymentAccountId = defaultAccount?.id ?? null;
+  }
+
+  return {
+    paymentMethodId: method.id,
+    paymentChannelId,
+    paymentAccountId,
+    accreditationDays,
+  };
 }
 
 // ============================================================
@@ -109,6 +208,8 @@ export const comprasRouter = router({
           payments: {
             include: {
               paymentMethod: { select: { name: true } },
+              paymentAccount: { select: { id: true, name: true } },
+              paymentChannel: { select: { id: true, name: true } },
             },
           },
         },
@@ -171,7 +272,7 @@ export const comprasRouter = router({
 
       let totalPurchases = 0;
       let totalPaid = 0;
-      let countPurchases = purchases.length;
+      const countPurchases = purchases.length;
       let totalVariable = 0;
       let totalFijo = 0;
       let totalImpuestos = 0;
@@ -235,6 +336,8 @@ export const comprasRouter = router({
               paymentMethod: {
                 select: { id: true, name: true, accreditationDays: true },
               },
+              paymentAccount: { select: { id: true, name: true } },
+              paymentChannel: { select: { id: true, name: true } },
             },
             orderBy: { paymentDate: "asc" },
           },
@@ -324,8 +427,7 @@ export const comprasRouter = router({
       const status = derivePurchaseStatus(
         totalPaid,
         derived.total,
-        input.dueDate,
-        "pending"
+        input.dueDate
       );
 
       // Create purchase
@@ -351,17 +453,20 @@ export const comprasRouter = router({
       // Create inline payments (with accreditation date calculation)
       if (input.payments.length > 0) {
         for (const payment of input.payments) {
-          const method = await db.paymentMethod.findUnique({
-            where: { id: payment.paymentMethodId },
+          const routing = await resolvePaymentRouting({
+            accountId: input.accountId,
+            paymentMethodId: payment.paymentMethodId,
+            paymentChannelId: payment.paymentChannelId,
+            paymentAccountId: payment.paymentAccountId,
           });
-          const accreditationDate = method
-            ? addDays(payment.paymentDate, method.accreditationDays)
-            : payment.paymentDate;
+          const accreditationDate = addDays(payment.paymentDate, routing.accreditationDays);
 
           await db.purchasePayment.create({
             data: {
               purchaseId: purchase.id,
-              paymentMethodId: payment.paymentMethodId,
+              paymentMethodId: routing.paymentMethodId,
+              paymentChannelId: routing.paymentChannelId,
+              paymentAccountId: routing.paymentAccountId,
               amount: payment.amount,
               paymentDate: payment.paymentDate,
               accreditationDate,
@@ -437,8 +542,7 @@ export const comprasRouter = router({
       const newStatus = derivePurchaseStatus(
         totalPaid,
         derived.total,
-        newDueDate,
-        current.status
+        newDueDate
       );
 
       return db.purchase.update({
@@ -525,26 +629,20 @@ export const comprasRouter = router({
         });
       }
 
-      // Get payment method for accreditation
-      const method = await db.paymentMethod.findUnique({
-        where: { id: input.paymentMethodId },
+      const routing = await resolvePaymentRouting({
+        accountId: purchase.accountId,
+        paymentMethodId: input.paymentMethodId,
+        paymentChannelId: input.paymentChannelId,
+        paymentAccountId: input.paymentAccountId,
       });
-      if (!method) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Método de pago no encontrado",
-        });
-      }
-
-      const accreditationDate = addDays(
-        input.paymentDate,
-        method.accreditationDays
-      );
+      const accreditationDate = addDays(input.paymentDate, routing.accreditationDays);
 
       const payment = await db.purchasePayment.create({
         data: {
           purchaseId: input.purchaseId,
-          paymentMethodId: input.paymentMethodId,
+          paymentMethodId: routing.paymentMethodId,
+          paymentChannelId: routing.paymentChannelId,
+          paymentAccountId: routing.paymentAccountId,
           amount: input.amount,
           paymentDate: input.paymentDate,
           accreditationDate,
@@ -566,8 +664,7 @@ export const comprasRouter = router({
       const newStatus = derivePurchaseStatus(
         totalPaid,
         derived.total,
-        purchase.dueDate,
-        purchase.status
+        purchase.dueDate
       );
 
       await db.purchase.update({
@@ -622,8 +719,7 @@ export const comprasRouter = router({
       const newStatus = derivePurchaseStatus(
         totalPaid,
         derived.total,
-        payment.purchase.dueDate,
-        payment.purchase.status
+        payment.purchase.dueDate
       );
 
       await db.purchase.update({
