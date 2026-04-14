@@ -77,6 +77,13 @@ type LastSale = {
   unitPrice: number;
   total: number;
   paymentMethodName: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unit: string;
+    unitPrice: number;
+    subtotal: number;
+  }>;
 };
 
 type CartItem = {
@@ -533,6 +540,13 @@ export default function PosPage() {
 
       const totalSaleAmount = cart.reduce((sum, it) => sum + toGross(it.subtotal), 0);
       const firstItem = cart[0];
+      const saleItems = cart.map((it) => ({
+        name: it.product.name,
+        quantity: it.quantity,
+        unit: it.product.unit,
+        unitPrice: toGross(it.unitPrice),
+        subtotal: toGross(it.subtotal),
+      }));
 
       setLastSale({
         id: firstSale?.id ?? "",
@@ -544,6 +558,7 @@ export default function PosPage() {
         unitPrice: toGross(firstItem.unitPrice),
         total: totalSaleAmount,
         paymentMethodName: methodName,
+        items: saleItems,
       });
 
       setSalesCount((prev) => prev + 1);
@@ -612,6 +627,23 @@ export default function PosPage() {
   const handlePrint = () => {
     if (!lastSale) return;
 
+    const itemsHtml = lastSale.items
+      .map(
+        (it) => `
+          <div style="margin: 4px 0;">
+            <div class="row">
+              <span class="bold">${it.name}</span>
+              <span>${formatCurrency(it.subtotal)}</span>
+            </div>
+            <div class="row" style="font-size:11px; color:#555;">
+              <span>${formatQuantity(it.quantity, it.unit)} ${it.unit} x ${formatCurrency(it.unitPrice)}</span>
+              <span></span>
+            </div>
+          </div>
+        `
+      )
+      .join("");
+
     const printContent = `
       <!DOCTYPE html>
       <html>
@@ -643,18 +675,8 @@ export default function PosPage() {
         <div class="center" style="margin-bottom:2px; font-size:11px; color:#555;">${formatDate(new Date())}</div>
         <div class="divider"></div>
 
-        <div class="row">
-          <span class="label">Producto:</span>
-          <span class="bold">${lastSale.productName}</span>
-        </div>
-        <div class="row">
-          <span class="label">Cantidad:</span>
-          <span>${lastSale.quantity}</span>
-        </div>
-        <div class="row">
-          <span class="label">Precio unitario:</span>
-          <span>${formatCurrency(lastSale.unitPrice)}</span>
-        </div>
+        <div class="bold" style="margin-bottom:4px;">Detalle del ticket</div>
+        ${itemsHtml}
 
         <div class="divider"></div>
 
@@ -735,19 +757,21 @@ export default function PosPage() {
           </div>
 
           <div className="bg-muted/50 rounded-xl border border-border p-5 text-left space-y-2.5 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Producto:</span>
-              <span className="font-medium">{lastSale.productName}</span>
+            <div className="text-muted-foreground text-xs uppercase tracking-wide font-semibold">
+              Detalle del carrito
             </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Cantidad:</span>
-              <span className="font-mono">{lastSale.quantity}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Precio Unitario:</span>
-              <span className="font-mono">
-                {formatCurrency(lastSale.unitPrice)}
-              </span>
+            <div className="space-y-1.5 max-h-40 overflow-auto pr-1">
+              {lastSale.items.map((it, idx) => (
+                <div key={`${it.name}-${idx}`} className="rounded-md border border-border/60 bg-background/60 p-2">
+                  <div className="flex justify-between gap-2">
+                    <span className="font-medium truncate">{it.name}</span>
+                    <span className="font-mono font-semibold">{formatCurrency(it.subtotal)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground font-mono">
+                    {formatQuantity(it.quantity, it.unit)} {it.unit} x {formatCurrency(it.unitPrice)}
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="flex justify-between border-t border-border pt-2.5 mt-1">
               <span className="font-semibold text-foreground">Total:</span>
