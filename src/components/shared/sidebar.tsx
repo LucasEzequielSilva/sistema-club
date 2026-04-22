@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -10,7 +11,6 @@ import {
   BarChart3,
   ChevronRight,
   ChevronDown,
-  Store,
   Waves,
   Target,
   FileText,
@@ -47,20 +47,20 @@ const primaryNav = [
 
 // ─── Sub-ítems de Finanzas (colapsable) ─────────────────────────────────────
 const finanzasNav = [
-  { title: "Resumen",       href: "/resumen",            icon: BarChart3 },
-  { title: "Cashflow",      href: "/cashflow",           icon: Waves },
-  { title: "Cuadro KPIs",   href: "/cuadro-resumen",     icon: Target },
-  { title: "Estados",       href: "/estados-resultados", icon: FileText },
-  { title: "Cuentas",       href: "/cuentas",            icon: Landmark },
+  { title: "Resumen",       href: "/resumen",            icon: BarChart3, locked: true },
+  { title: "Cashflow",      href: "/cashflow",           icon: Waves,     locked: true },
+  { title: "Cuadro KPIs",   href: "/cuadro-resumen",     icon: Target,    locked: true },
+  { title: "Estados",       href: "/estados-resultados", icon: FileText,  locked: true },
+  { title: "Cuentas",       href: "/cuentas",            icon: Landmark,  locked: true },
 ];
 
 // ─── Configuraciones (colapsable) ────────────────────────────────────────────
 const catalogosNav = [
-  { title: "Productos",       href: "/productos",       icon: Package },
-  { title: "Proveedores",     href: "/proveedores",     icon: Building2 },
-  { title: "Clasificaciones", href: "/clasificaciones", icon: Tag },
-  { title: "Mercadería",      href: "/mercaderia",      icon: Warehouse },
-  { title: "Facturación",     href: "/facturacion",     icon: Receipt },
+  { title: "Productos",       href: "/productos",       icon: Package,   locked: false },
+  { title: "Proveedores",     href: "/proveedores",     icon: Building2, locked: false },
+  { title: "Clasificaciones", href: "/clasificaciones", icon: Tag,       locked: false },
+  { title: "Mercadería",      href: "/mercaderia",      icon: Warehouse, locked: false },
+  { title: "Facturación",     href: "/facturacion",     icon: Receipt,   locked: true  },
 ];
 
 const finanzasPaths  = finanzasNav.map((i) => i.href);
@@ -96,16 +96,24 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
   return (
     <aside className="w-56 h-full flex flex-col bg-[var(--sidebar)] border-r border-[var(--sidebar-border)] text-[var(--sidebar-foreground)] shadow-sm">
 
-      {/* Brand */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-[var(--sidebar-border)]">
-        <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-[var(--sidebar-primary)] shrink-0">
-          <Store className="w-3.5 h-3.5 text-white" />
-        </div>
+      {/* Brand — click = home */}
+      <Link
+        href="/tablero"
+        onClick={onNavigate}
+        className="flex items-center gap-3 px-4 py-4 border-b border-[var(--sidebar-border)] hover:bg-accent/50 transition-colors cursor-pointer"
+      >
+        <Image
+          src="/brand/icon-app.svg"
+          alt="Acelerator"
+          width={24}
+          height={24}
+          className="rounded-lg shrink-0"
+        />
         <div className="leading-none min-w-0">
-          <p className="text-sm font-semibold text-foreground truncate">Sistema Club</p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Gestión comercial</p>
+          <p className="text-sm font-bold text-foreground truncate">Acelerator</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">by Matías Randazzo</p>
         </div>
-      </div>
+      </Link>
 
       {/* Nav */}
       <ScrollArea className="flex-1 min-h-0 px-2 py-3">
@@ -154,6 +162,9 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
           >
             <BarChart3 className="w-4 h-4 shrink-0 text-muted-foreground/50 group-hover:text-muted-foreground" />
             <span className="flex-1 text-left">Finanzas</span>
+            <span className="inline-flex items-center px-1.5 py-[1px] rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] font-semibold uppercase tracking-wider">
+              Pronto
+            </span>
             {finanzasOpen
               ? <ChevronDown className="w-3 h-3 text-muted-foreground/40" />
               : <ChevronRight className="w-3 h-3 text-muted-foreground/40" />
@@ -168,7 +179,12 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
                   <Link key={item.href} href={item.href} onClick={onNavigate}>
                     <div className={subItemClass(pathname.startsWith(item.href))}>
                       <Icon className="w-3.5 h-3.5 shrink-0" />
-                      {item.title}
+                      <span className="flex-1">{item.title}</span>
+                      {item.locked && (
+                        <span className="ml-auto inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] font-semibold uppercase tracking-wider">
+                          Pronto
+                        </span>
+                      )}
                     </div>
                   </Link>
                 );
@@ -204,7 +220,12 @@ export function Sidebar({ onNavigate, userEmail }: { onNavigate?: () => void; us
                   <Link key={item.href} href={item.href} onClick={onNavigate}>
                     <div className={subItemClass(pathname.startsWith(item.href))}>
                       <Icon className="w-3.5 h-3.5 shrink-0" />
-                      {item.title}
+                      <span className="flex-1">{item.title}</span>
+                      {item.locked && (
+                        <span className="ml-auto inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-full bg-primary/10 text-primary border border-primary/20 text-[9px] font-semibold uppercase tracking-wider">
+                          Pronto
+                        </span>
+                      )}
                     </div>
                   </Link>
                 );

@@ -7,8 +7,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-heading);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-body);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -47,48 +49,51 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
-/* ─── OpenCode — light grayscale + orange accent only ───────────────────────
-   Philosophy: achromatic. No blues, no greens in chrome.
-   Only orange (#f97316) breaks the gray scale — on CTAs and active states.
-   Everything else: white → #fafafa → #f4f4f5 → #e4e4e7 → #71717a → #18181b
-──────────────────────────────────────────────────────────────────────────── */
+/* ─── Acelerator by Matías Randazzo ───────────────────────────────────────
+   Paleta oficial del brandbook:
+     #000e2b  azul noche (foreground / dark surfaces)
+     #0052fe  azul eléctrico (primary / CTA)
+     #00bcd1  turquesa (info secondary)
+     #8aebda  celeste (success-muted)
+     #f4f4f4  gris claro (neutral bg)
+──────────────────────────────────────────────────────────────────────── */
 :root {
   color-scheme: light;
   --radius: 0.45rem;
 
-  /* ── Grayscale surfaces ────────────────────────────────────────────────── */
-  --background:           oklch(0.985 0 0);       /* #fafafa */
-  --foreground:           oklch(0.13 0 0);         /* #18181b */
+  /* ── Surfaces — white/gray with subtle blue tint ──────────────────────── */
+  --background:           oklch(0.985 0.003 260);  /* near-white, hint of blue */
+  --foreground:           oklch(0.15 0.06 260);    /* #000e2b — azul noche */
 
   --card:                 oklch(1 0 0);            /* #ffffff */
-  --card-foreground:      oklch(0.13 0 0);
+  --card-foreground:      oklch(0.15 0.06 260);
 
   --popover:              oklch(1 0 0);
-  --popover-foreground:   oklch(0.13 0 0);
+  --popover-foreground:   oklch(0.15 0.06 260);
 
-  /* ── Orange — the only accent ──────────────────────────────────────────── */
-  --primary:              oklch(0.70 0.19 42);     /* #f97316 */
+  /* ── Azul eléctrico — PRIMARY accent (Acelerator) ─────────────────────── */
+  --primary:              oklch(0.52 0.26 265);    /* #0052fe */
   --primary-foreground:   oklch(1 0 0);
 
-  --secondary:            oklch(0.96 0 0);         /* #f4f4f5 */
-  --secondary-foreground: oklch(0.13 0 0);
+  --secondary:            oklch(0.96 0 0);         /* #f4f4f4 */
+  --secondary-foreground: oklch(0.15 0.06 260);
 
-  --muted:                oklch(0.96 0 0);         /* #f4f4f5 */
-  --muted-foreground:     oklch(0.50 0 0);         /* #71717a */
+  --muted:                oklch(0.96 0 0);         /* #f4f4f4 */
+  --muted-foreground:     oklch(0.50 0.02 260);    /* gris medio con tint azul */
 
-  --accent:               oklch(0.94 0 0);         /* #e9e9eb */
-  --accent-foreground:    oklch(0.13 0 0);
+  --accent:               oklch(0.94 0.015 260);   /* hover con tint azul sutil */
+  --accent-foreground:    oklch(0.15 0.06 260);
 
   --destructive:          oklch(0.577 0.22 27);
-  --border:               oklch(0.90 0 0);         /* #e4e4e7 */
-  --input:                oklch(0.90 0 0);
-  --ring:                 oklch(0.70 0.19 42);     /* orange ring */
+  --border:               oklch(0.90 0.008 260);   /* gris claro con tint azul */
+  --input:                oklch(0.90 0.008 260);
+  --ring:                 oklch(0.52 0.26 265);    /* focus azul eléctrico */
 
-  /* ── Semantic tokens — tinted but mostly gray ─────────────────────────── */
-  --success:                  oklch(0.52 0.16 145);
+  /* ── Semantic tokens — alineados al brandbook ─────────────────────────── */
+  --success:                  oklch(0.52 0.16 180);    /* turquesa profundo */
   --success-foreground:       oklch(1 0 0);
-  --success-muted:            oklch(0.95 0.04 145);
-  --success-muted-foreground: oklch(0.38 0.13 145);
+  --success-muted:            oklch(0.87 0.09 180);    /* #8aebda — celeste */
+  --success-muted-foreground: oklch(0.38 0.13 195);
 
   --warning:                  oklch(0.70 0.19 42);
   --warning-foreground:       oklch(1 0 0);
@@ -100,30 +105,30 @@
   --danger-muted:             oklch(0.96 0.04 27);
   --danger-muted-foreground:  oklch(0.44 0.18 27);
 
-  --info:                     oklch(0.52 0.16 240);
-  --info-foreground:          oklch(1 0 0);
-  --info-muted:               oklch(0.95 0.04 240);
-  --info-muted-foreground:    oklch(0.38 0.13 240);
+  --info:                     oklch(0.73 0.13 210);    /* #00bcd1 — turquesa */
+  --info-foreground:          oklch(0.15 0.06 260);
+  --info-muted:               oklch(0.95 0.04 210);
+  --info-muted-foreground:    oklch(0.38 0.13 210);
 
-  --money:                    oklch(0.52 0.16 145);
-  --money-muted-foreground:   oklch(0.38 0.13 145);
+  --money:                    oklch(0.52 0.16 180);
+  --money-muted-foreground:   oklch(0.38 0.13 180);
 
-  /* ── Charts — muted palette ───────────────────────────────────────────── */
-  --chart-1: oklch(0.70 0.19 42);   /* orange — primary */
-  --chart-2: oklch(0.50 0 0);       /* gray */
-  --chart-3: oklch(0.52 0.16 145);  /* green — secondary only */
-  --chart-4: oklch(0.577 0.22 27);  /* red */
-  --chart-5: oklch(0.65 0 0);       /* light gray */
+  /* ── Charts — paleta Acelerator ───────────────────────────────────────── */
+  --chart-1: oklch(0.52 0.26 265);  /* azul eléctrico — primary */
+  --chart-2: oklch(0.73 0.13 210);  /* turquesa */
+  --chart-3: oklch(0.87 0.09 180);  /* celeste claro */
+  --chart-4: oklch(0.577 0.22 27);  /* rojo — destructive */
+  --chart-5: oklch(0.50 0.02 260);  /* gris medio tinted */
 
-  /* ── Sidebar — white with subtle separator ────────────────────────────── */
-  --sidebar:                  oklch(0.98 0 0);     /* near-white panel */
-  --sidebar-foreground:       oklch(0.20 0 0);
-  --sidebar-primary:          oklch(0.70 0.19 42); /* orange active */
+  /* ── Sidebar — azul noche sobre fondo claro ───────────────────────────── */
+  --sidebar:                  oklch(0.98 0.004 260);   /* near-white con tint */
+  --sidebar-foreground:       oklch(0.20 0.05 260);
+  --sidebar-primary:          oklch(0.52 0.26 265);    /* active azul eléctrico */
   --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent:           oklch(0.93 0 0);     /* hover gray */
-  --sidebar-accent-foreground: oklch(0.13 0 0);
-  --sidebar-border:           oklch(0.90 0 0);
-  --sidebar-ring:             oklch(0.70 0.19 42);
+  --sidebar-accent:           oklch(0.93 0.012 260);   /* hover con tint azul */
+  --sidebar-accent-foreground: oklch(0.15 0.06 260);
+  --sidebar-border:           oklch(0.90 0.008 260);
+  --sidebar-ring:             oklch(0.52 0.26 265);
 }
 
 @layer base {

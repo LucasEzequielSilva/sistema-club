@@ -41,6 +41,7 @@ export function PaymentChannelDialog({
   const [name, setName] = useState("");
   const [paymentAccountId, setPaymentAccountId] = useState("");
   const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [methodOverride, setMethodOverride] = useState(false); // true cuando el user elige el tipo a mano
   const [accreditationDays, setAccreditationDays] = useState("0");
   const [feePct, setFeePct] = useState("0");
   const [isDefault, setIsDefault] = useState(false);
@@ -83,6 +84,8 @@ export function PaymentChannelDialog({
           setName(ch.name ?? "");
           setPaymentAccountId(ch.paymentAccountId ?? "");
           setPaymentMethodId(ch.paymentMethodId ?? "");
+          // En edit asumimos que el tipo ya fue elegido conscientemente
+          setMethodOverride(true);
           setAccreditationDays(String(ch.accreditationDays ?? 0));
           setFeePct(String(ch.feePct ?? 0));
           setIsDefault(Boolean(ch.isDefault));
@@ -93,6 +96,7 @@ export function PaymentChannelDialog({
       setName("");
       setPaymentAccountId("");
       setPaymentMethodId("");
+      setMethodOverride(false);
       setAccreditationDays("0");
       setFeePct("0");
       setIsDefault(false);
@@ -100,11 +104,60 @@ export function PaymentChannelDialog({
     }
   }, [open, editingId, accountId]);
 
+  // Auto-detectar tipo de pago a partir del nombre del canal
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .trim();
+
+  const detectedMethodId = useMemo(() => {
+    const n = normalize(name);
+    if (!n || methods.length === 0) return null;
+
+    // 1) Match directo: el nombre del canal contiene el nombre del método
+    //    Ordenamos por longitud desc para priorizar "tarjeta de credito" sobre "tarjeta"
+    const sorted = [...methods].sort((a, b) => b.name.length - a.name.length);
+    for (const m of sorted) {
+      const mn = normalize(m.name);
+      if (mn && n.includes(mn)) return m.id;
+    }
+
+    // 2) Keywords sueltas → intento encontrar el método cuyo nombre las contenga
+    const keywordToNeedle: Array<[string, string]> = [
+      ["credito", "credito"],
+      ["debito", "debito"],
+      ["transfer", "transfer"],
+      ["efectivo", "efectivo"],
+      ["cash", "efectivo"],
+      ["caja", "efectivo"],
+      ["cheque", "cheque"],
+      ["qr", "qr"],
+      ["mercadopago", "mercado"],
+      ["mercado pago", "mercado"],
+    ];
+    for (const [kw, needle] of keywordToNeedle) {
+      if (n.includes(kw)) {
+        const m = methods.find((x) => normalize(x.name).includes(needle));
+        if (m) return m.id;
+      }
+    }
+    return null;
+  }, [name, methods]);
+
+  // Cuando cambia el detected, sincronizo el select (solo si el user no hizo override manual)
+  useEffect(() => {
+    if (editingId || methodOverride) return;
+    if (detectedMethodId) setPaymentMethodId(detectedMethodId);
+  }, [detectedMethodId, editingId, methodOverride]);
+
   useEffect(() => {
     if (!open || editingId || paymentAccountId) return;
     const defaultAcc = accountsOptions.find((a) => a.isDefault) || accountsOptions[0];
     if (defaultAcc) setPaymentAccountId(defaultAcc.id);
   }, [open, editingId, paymentAccountId, accountsOptions]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,12 +169,22 @@ export function PaymentChannelDialog({
         return;
       }
 
+      // El tipo de pago se deriva automáticamente del nombre del canal.
+      // Si el auto-detect no matchea, usamos el primer método disponible como fallback
+      // silencioso (el user no ve esto — es agrupación interna para filtrado).
+      const resolvedMethodId = detectedMethodId ?? paymentMethodId ?? methods[0]?.id ?? "";
+      if (!resolvedMethodId) {
+        toast.error("No hay tipos de pago disponibles. Recargá la página.");
+        setLoading(false);
+        return;
+      }
+
       if (editingId) {
         await trpc.clasificaciones.updatePaymentChannel.mutate({
           id: editingId,
           name: name.trim() || undefined,
           paymentAccountId,
-          paymentMethodId: paymentMethodId || null,
+          paymentMethodId: resolvedMethodId,
           accreditationDays: parseInt(accreditationDays || "0", 10),
           feePct: parseFloat(feePct || "0"),
           isDefault,
@@ -133,7 +196,7 @@ export function PaymentChannelDialog({
           accountId,
           name: name.trim(),
           paymentAccountId,
-          paymentMethodId: paymentMethodId || null,
+          paymentMethodId: resolvedMethodId,
           accreditationDays: parseInt(accreditationDays || "0", 10),
           feePct: parseFloat(feePct || "0"),
           isDefault,
@@ -184,23 +247,6 @@ export function PaymentChannelDialog({
                   {accountsOptions.map((a) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label>Método legacy (opcional)</Label>
-              <Select value={paymentMethodId || "none"} onValueChange={(v) => setPaymentMethodId(v === "none" ? "" : v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sin método asociado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin método asociado</SelectItem>
-                  {methods.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

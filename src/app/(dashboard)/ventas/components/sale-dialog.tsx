@@ -45,6 +45,7 @@ type InlinePayment = {
   paymentMethodId: string;
   paymentChannelId: string;
   amount: string;
+  amountManual: boolean;
   paymentDate: string;
 };
 
@@ -275,6 +276,7 @@ export function SaleDialog({
         paymentMethodId: "",
         paymentChannelId: "",
         amount: String(Math.max(total - totalPayments, 0).toFixed(2)),
+        amountManual: false,
         paymentDate: form.saleDate,
       },
     ]);
@@ -287,12 +289,51 @@ export function SaleDialog({
   const updatePayment = (
     index: number,
     field: keyof InlinePayment,
-    value: string
+    value: string | boolean
   ) => {
     setPayments((prev) =>
-      prev.map((p, i) => (i === index ? { ...p, [field]: value } : p))
+      prev.map((p, i) => {
+        if (i !== index) return p;
+        const next = { ...p, [field]: value } as InlinePayment;
+        // If user edits the amount directly, flag it as manual
+        if (field === "amount") next.amountManual = true;
+        return next;
+      })
     );
   };
+
+  // Auto-sync non-manual payment amounts with total when total changes
+  // (e.g. user edits discount, price, or quantity after adding a cobro)
+  useEffect(() => {
+    if (payments.length === 0) return;
+    setPayments((prev) => {
+      const manualSum = prev
+        .filter((p) => p.amountManual)
+        .reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+      const nonManual = prev.filter((p) => !p.amountManual);
+      if (nonManual.length === 0) return prev;
+
+      const remaining = Math.max(total - manualSum, 0);
+      // Split remaining evenly between non-manual rows; last row takes the rounding diff
+      const perRow = Math.floor((remaining / nonManual.length) * 100) / 100;
+      let assigned = 0;
+
+      let nonManualIdx = 0;
+      return prev.map((p) => {
+        if (p.amountManual) return p;
+        const isLast = nonManualIdx === nonManual.length - 1;
+        const amount = isLast
+          ? Math.max(remaining - assigned, 0)
+          : perRow;
+        assigned += amount;
+        nonManualIdx += 1;
+        const amountStr = amount.toFixed(2);
+        if (p.amount === amountStr) return p;
+        return { ...p, amount: amountStr };
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -673,7 +714,6 @@ export function SaleDialog({
                                 .filter(
                                   (ch) =>
                                     !payment.paymentMethodId ||
-                                    !ch.paymentMethodId ||
                                     ch.paymentMethodId === payment.paymentMethodId
                                 )
                                 .map((ch) => (

@@ -98,7 +98,7 @@ export function WelcomeModal() {
 
           <div className="space-y-1 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150">
             <p className="text-xs font-bold uppercase tracking-widest text-primary/70">
-              Sistema Club
+              Acelerator
             </p>
             <h1 className="text-2xl font-bold text-foreground">
               ¡Bienvenido! 👋

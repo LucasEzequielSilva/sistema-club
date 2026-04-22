@@ -30,6 +30,38 @@ export const updateProductCategorySchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+// ProductSubcategory
+export const createProductSubcategorySchema = z.object({
+  accountId: z.string().min(1, "Account ID requerido"),
+  categoryId: z.string().cuid("Categoría inválida"),
+  name: z
+    .string()
+    .min(1, "El nombre es obligatorio")
+    .max(100, "El nombre no puede tener más de 100 caracteres"),
+  description: z
+    .string()
+    .max(500, "La descripción no puede tener más de 500 caracteres")
+    .optional(),
+  sortOrder: z.number().int().default(0),
+});
+
+export const updateProductSubcategorySchema = z.object({
+  id: z.string().cuid("Invalid subcategory ID"),
+  categoryId: z.string().cuid("Categoría inválida").optional(),
+  name: z
+    .string()
+    .min(1, "El nombre es obligatorio")
+    .max(100, "El nombre no puede tener más de 100 caracteres")
+    .optional(),
+  description: z
+    .string()
+    .max(500, "La descripción no puede tener más de 500 caracteres")
+    .optional()
+    .nullable(),
+  sortOrder: z.number().int().optional(),
+  isActive: z.boolean().optional(),
+});
+
 // CostCategory
 export const createCostCategorySchema = z.object({
   accountId: z.string().min(1, "Account ID requerido"),
@@ -135,7 +167,7 @@ export const updatePaymentAccountSchema = z.object({
 export const createPaymentChannelSchema = z.object({
   accountId: z.string().min(1, "Account ID requerido"),
   paymentAccountId: z.string().cuid("Cuenta receptora inválida"),
-  paymentMethodId: z.string().cuid("Método de pago inválido").optional().nullable(),
+  paymentMethodId: z.string().cuid("Tipo de pago inválido"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -152,7 +184,7 @@ export const createPaymentChannelSchema = z.object({
 export const updatePaymentChannelSchema = z.object({
   id: z.string().cuid("Invalid payment channel ID"),
   paymentAccountId: z.string().cuid("Cuenta receptora inválida").optional(),
-  paymentMethodId: z.string().cuid("Método de pago inválido").optional().nullable(),
+  paymentMethodId: z.string().cuid("Tipo de pago inválido").optional(),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -171,6 +203,9 @@ export const updatePaymentChannelSchema = z.object({
 // Type exports
 export type CreateProductCategory = z.infer<typeof createProductCategorySchema>;
 export type UpdateProductCategory = z.infer<typeof updateProductCategorySchema>;
+
+export type CreateProductSubcategory = z.infer<typeof createProductSubcategorySchema>;
+export type UpdateProductSubcategory = z.infer<typeof updateProductSubcategorySchema>;
 
 export type CreateCostCategory = z.infer<typeof createCostCategorySchema>;
 export type UpdateCostCategory = z.infer<typeof updateCostCategorySchema>;

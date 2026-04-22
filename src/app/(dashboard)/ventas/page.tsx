@@ -594,14 +594,6 @@ export default function VentasPage() {
             <Button variant="outline" onClick={exportCSV} disabled={sales.length === 0}>
               Exportar CSV
             </Button>
-            <Button
-              onClick={() => {
-                setEditingId(null);
-                setShowDialog(true);
-              }}
-            >
-              + Nueva Venta
-            </Button>
           </>
         }
       />

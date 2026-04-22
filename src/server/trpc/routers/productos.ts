@@ -138,6 +138,7 @@ export const productosRouter = router({
         orderBy: { name: "asc" },
         include: {
           category: { select: { id: true, name: true } },
+          subcategory: { select: { id: true, name: true } },
           supplier: { select: { id: true, name: true } },
           priceListItems: {
             include: {
@@ -219,6 +220,7 @@ export const productosRouter = router({
             },
           },
           category: { select: { id: true, name: true } },
+          subcategory: { select: { id: true, name: true, categoryId: true } },
           supplier: { select: { id: true, name: true } },
           priceListItems: {
             include: {
@@ -312,11 +314,29 @@ export const productosRouter = router({
         });
       }
 
+      // Validate subcategory belongs to the selected category
+      if (input.subcategoryId) {
+        const subcat = await db.productSubcategory.findFirst({
+          where: {
+            id: input.subcategoryId,
+            accountId: input.accountId,
+            categoryId: input.categoryId,
+          },
+        });
+        if (!subcat) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La subcategoría no pertenece a la categoría seleccionada",
+          });
+        }
+      }
+
       // Create product
       const product = await db.product.create({
         data: {
           accountId: input.accountId,
           categoryId: input.categoryId,
+          subcategoryId: input.subcategoryId || null,
           supplierId: input.supplierId || null,
           name: input.name,
           barcode: input.barcode || null,
@@ -384,6 +404,24 @@ export const productosRouter = router({
         });
       }
 
+      // Validate subcategory belongs to the (possibly new) category
+      if (fields.subcategoryId) {
+        const targetCategoryId = fields.categoryId ?? current.categoryId;
+        const subcat = await db.productSubcategory.findFirst({
+          where: {
+            id: fields.subcategoryId,
+            accountId: current.accountId,
+            categoryId: targetCategoryId,
+          },
+        });
+        if (!subcat) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "La subcategoría no pertenece a la categoría seleccionada",
+          });
+        }
+      }
+
       // Duplicate name check
       if (fields.name) {
         const dup = await db.product.findFirst({
@@ -408,12 +446,24 @@ export const productosRouter = router({
         fields.laborCost !== undefined ||
         fields.packagingCost !== undefined;
 
+      // If category is changing and no subcategory was provided, clear the
+      // stale subcategory to avoid leaving it tied to the old category.
+      const categoryIsChanging =
+        fields.categoryId !== undefined && fields.categoryId !== current.categoryId;
+      const shouldClearSubcategory =
+        categoryIsChanging && fields.subcategoryId === undefined;
+
       const updated = await db.product.update({
         where: { id },
         data: {
           ...(fields.categoryId !== undefined && {
             categoryId: fields.categoryId,
           }),
+          ...(fields.subcategoryId !== undefined
+            ? { subcategoryId: fields.subcategoryId || null }
+            : shouldClearSubcategory
+              ? { subcategoryId: null }
+              : {}),
           ...(fields.supplierId !== undefined && {
             supplierId: fields.supplierId || null,
           }),

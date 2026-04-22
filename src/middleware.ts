@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
+import { isAdminEmail } from "@/lib/admin";
 
 // Rutas públicas que no requieren sesión
 const PUBLIC_PREFIXES = [
   "/login",
   "/api/auth/",
+  "/api/admin/bug-capture", // Error capture público — cualquiera puede reportar un crash
+  "/api/support", // Canal de soporte público — sesión opcional, logueamos email si hay
+  "/api/admin/v1", // API REST pública: auth con Bearer token dentro de cada handler, NO via cookie. Cubre /api/admin/v1 (index) y /api/admin/v1/...
+  "/brand/", // Assets de branding (logos, favicon render) — accesibles desde /login
+  "/fonts/", // Fuentes locales — accesibles desde todas las pantallas públicas
   "/_next/",
   "/favicon.ico",
 ];
 
 const ONBOARDING_PATH = "/onboarding";
 const ONBOARDING_COOKIE = "sc_onboarding_done";
+const ADMIN_PREFIX = "/admin";
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -48,6 +55,16 @@ export async function middleware(req: NextRequest) {
     const res = NextResponse.redirect(loginUrl);
     if (token) res.cookies.delete(COOKIE_NAME);
     return res;
+  }
+
+  // ── Admin gate ──────────────────────────────────────────────
+  if (pathname.startsWith(ADMIN_PREFIX)) {
+    if (!isAdminEmail(session.email)) {
+      // No sos admin → redirect al tablero
+      return NextResponse.redirect(new URL("/tablero", req.url));
+    }
+    // Admin autorizado — NO aplicar chequeo de onboarding
+    return NextResponse.next();
   }
 
   // Usuario autenticado — verificar onboarding

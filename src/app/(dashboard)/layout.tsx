@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/shared/sidebar";
 import { MobileNav } from "@/components/shared/mobile-nav";
 import { AIAssistant } from "@/components/shared/ai-assistant";
+import { SupportButton } from "@/components/shared/support-button";
 import { KeyboardShortcutsModal } from "@/components/shared/keyboard-shortcuts-modal";
 import { OnboardingProgressPill } from "@/components/onboarding/progress-pill";
 import { cookies } from "next/headers";
@@ -33,6 +34,7 @@ export default async function DashboardLayout({
         </div>
       </main>
       <AIAssistant />
+      <SupportButton />
       <KeyboardShortcutsModal />
       {/* Onboarding — progress pill para páginas post-wizard */}
       <OnboardingProgressPill />

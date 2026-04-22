@@ -2,7 +2,8 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Store, Loader2, Eye, EyeOff } from "lucide-react";
+import Image from "next/image";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,13 +56,17 @@ function LoginForm() {
 
         {/* Brand */}
         <div className="flex flex-col items-center gap-3 mb-8">
-          <div className="flex items-center justify-center w-12 h-12 rounded-2xl bg-primary shadow-lg">
-            <Store className="w-6 h-6 text-white" />
-          </div>
-          <div className="text-center">
-            <h1 className="text-xl font-bold text-foreground">Sistema Club</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Gestión comercial para pymes</p>
-          </div>
+          <Image
+            src="/brand/acelerator-logo-light.png"
+            alt="Método Acelerador de Ganancias by Matías Randazzo"
+            width={360}
+            height={120}
+            priority
+            className="h-auto w-auto max-h-28 object-contain"
+          />
+          <p className="text-xs text-muted-foreground text-center">
+            Gestión financiera para pymes argentinas
+          </p>
         </div>
 
         {/* Form */}
@@ -143,9 +148,18 @@ function LoginForm() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground mt-6">
-          ¿Problemas para ingresar? Contactá a tu administrador.
-        </p>
+        <div className="flex flex-col items-center gap-3 mt-6">
+          <p className="text-center text-xs text-muted-foreground">
+            ¿Problemas? Contactá a tu administrador.
+          </p>
+          <Image
+            src="/brand/matias-logo-02.png"
+            alt="by Matías Randazzo"
+            width={120}
+            height={28}
+            className="h-auto w-auto max-h-8 opacity-60"
+          />
+        </div>
       </div>
     </div>
   );

@@ -55,3 +55,19 @@ nul
 
 # npm cache (local dev)
 /npm-cache
+
+# Brandbook source (464 MB of PDFs/videos/AI files — never commit, kept local)
+/public/branding/
+
+# Scratch scripts (exploration, one-shot seeding, recon)
+/scripts/*.py
+/scripts/create-*.ts
+/scripts/reset-*.ts
+/scripts/fix-*.ts
+/scripts/dev-server.log
+/reports/
+
+# Handoff docs that live outside repo
+/ABOUT.md
+/SPRINT*.docx
+/scripts/screenshots/

@@ -4,6 +4,8 @@ import { db } from "@/server/db";
 import {
   createProductCategorySchema,
   updateProductCategorySchema,
+  createProductSubcategorySchema,
+  updateProductSubcategorySchema,
   createCostCategorySchema,
   updateCostCategorySchema,
   createPaymentMethodSchema,
@@ -134,6 +136,121 @@ export const clasificacionesRouter = router({
         where: { id: input.id },
       });
 
+      return { success: true };
+    }),
+
+  // ===========================
+  // PRODUCT SUBCATEGORIES
+  // ===========================
+
+  listProductSubcategories: publicProcedure
+    .input(
+      z.object({
+        accountId: z.string(),
+        categoryId: z.string().optional(),
+        isActive: z.boolean().optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      return db.productSubcategory.findMany({
+        where: {
+          accountId: input.accountId,
+          ...(input.categoryId && { categoryId: input.categoryId }),
+          ...(input.isActive !== undefined && { isActive: input.isActive }),
+        },
+        include: {
+          category: { select: { id: true, name: true } },
+        },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      });
+    }),
+
+  createProductSubcategory: publicProcedure
+    .input(createProductSubcategorySchema)
+    .mutation(async ({ input }) => {
+      const category = await db.productCategory.findFirst({
+        where: { id: input.categoryId, accountId: input.accountId },
+      });
+      if (!category) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Categoría no encontrada",
+        });
+      }
+
+      const existing = await db.productSubcategory.findFirst({
+        where: { categoryId: input.categoryId, name: input.name },
+      });
+      if (existing) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Ya existe una subcategoría "${input.name}" en esta categoría`,
+        });
+      }
+
+      return db.productSubcategory.create({
+        data: {
+          accountId: input.accountId,
+          categoryId: input.categoryId,
+          name: input.name,
+          description: input.description,
+          sortOrder: input.sortOrder,
+        },
+      });
+    }),
+
+  updateProductSubcategory: publicProcedure
+    .input(updateProductSubcategorySchema)
+    .mutation(async ({ input }) => {
+      const { id, ...data } = input;
+
+      const current = await db.productSubcategory.findUnique({ where: { id } });
+      if (!current) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Subcategoría no encontrada",
+        });
+      }
+
+      if (data.name || data.categoryId) {
+        const targetCategoryId = data.categoryId ?? current.categoryId;
+        const targetName = data.name ?? current.name;
+        const existing = await db.productSubcategory.findFirst({
+          where: {
+            categoryId: targetCategoryId,
+            name: targetName,
+            id: { not: id },
+          },
+        });
+        if (existing) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Ya existe una subcategoría "${targetName}" en esa categoría`,
+          });
+        }
+      }
+
+      return db.productSubcategory.update({
+        where: { id },
+        data,
+      });
+    }),
+
+  deleteProductSubcategory: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const productsCount = await db.product.count({
+        where: { subcategoryId: input.id },
+      });
+
+      if (productsCount > 0) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `No se puede eliminar: hay ${productsCount} producto(s) usando esta subcategoría. Desactívala en su lugar.`,
+        });
+      }
+
+      await db.productSubcategory.delete({ where: { id: input.id } });
       return { success: true };
     }),
 

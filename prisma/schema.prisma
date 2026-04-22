@@ -30,6 +30,7 @@ model Account {
   
   // Catalogs
   productCategories ProductCategory[]
+  productSubcategories ProductSubcategory[]
   costCategories    CostCategory[]
   paymentMethods    PaymentMethod[]
   paymentAccounts   PaymentAccount[]
@@ -136,12 +137,32 @@ model ProductCategory {
   createdAt DateTime  @default(now())
 
   // Relations
-  account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  products  Product[]
-  sales     Sale[]
+  account       Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  subcategories ProductSubcategory[]
+  products      Product[]
+  sales         Sale[]
 
   @@unique([accountId, name])
   @@map("product_categories")
+}
+
+model ProductSubcategory {
+  id          String    @id @default(cuid())
+  accountId   String
+  categoryId  String
+  name        String
+  description String?
+  sortOrder   Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  account   Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category  ProductCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products  Product[]
+
+  @@unique([categoryId, name])
+  @@map("product_subcategories")
 }
 
 model CostCategory {
@@ -273,8 +294,9 @@ model Product {
   id                  String    @id @default(cuid())
   accountId           String
   categoryId          String
+  subcategoryId       String?
   supplierId          String?
-  
+
   name                String
   barcode             String?
   sku                 String?
@@ -300,6 +322,7 @@ model Product {
   // Relations
   account             Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
   category            ProductCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory         ProductSubcategory? @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
   supplier            Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   priceListItems      PriceListItem[]
   sales               Sale[]
@@ -632,6 +655,32 @@ model Invoice {
 
   @@unique([accountId, invoiceType, puntoVenta, invoiceNumber])
   @@map("invoices")
+}
+
+// ============================================================
+// ADMIN — Bug reports (capturados autom. + manuales)
+// ============================================================
+
+model BugReport {
+  id          String   @id @default(cuid())
+  accountId   String?  // Opcional: quien lo reportó pertenecía a esta cuenta
+  userEmail   String?  // Email del usuario logueado al reportar/disparar
+  source      String   // manual | auto-error | auto-promise | auto-boundary
+  severity    String   @default("medium") // low | medium | high | critical
+  status      String   @default("open")   // open | investigating | resolved | wontfix
+  title       String
+  description String?
+  url         String?  // Página donde ocurrió
+  userAgent   String?
+  stackTrace  String?
+  metadata    Json?    // Contexto extra (breadcrumbs, props, state, etc)
+  screenshot  String?  // Data URL base64 (del html2canvas)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([severity, createdAt])
+  @@map("bug_reports")
 }
 
 // ============================================================

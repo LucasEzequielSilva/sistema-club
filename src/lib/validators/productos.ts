@@ -7,6 +7,7 @@ import { z } from "zod";
 export const createProductSchema = z.object({
   accountId: z.string().min(1, "Account ID requerido"),
   categoryId: z.string().cuid("Categoría es obligatoria"),
+  subcategoryId: z.string().cuid("Subcategoría inválida").optional().nullable(),
   supplierId: z.string().cuid("Invalid supplier ID").optional().nullable(),
 
   name: z
@@ -40,6 +41,7 @@ export const createProductSchema = z.object({
 export const updateProductSchema = z.object({
   id: z.string().cuid("Invalid product ID"),
   categoryId: z.string().cuid("Invalid category ID").optional(),
+  subcategoryId: z.string().cuid("Subcategoría inválida").optional().nullable(),
   supplierId: z.string().cuid("Invalid supplier ID").optional().nullable(),
 
   name: z

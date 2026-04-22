@@ -163,7 +163,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
 
       <div>
         <p className="text-xs font-bold uppercase tracking-widest text-primary/60 mb-2">
-          Sistema Club
+          Acelerator
         </p>
         <h1 className="text-3xl font-bold text-foreground">¡Hola! 👋</h1>
         <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
@@ -1030,7 +1030,7 @@ export default function OnboardingPage() {
             <Store className="w-3.5 h-3.5 text-white" />
           </div>
           <span className="text-sm font-semibold text-foreground">
-            Sistema Club
+            Acelerator
           </span>
         </div>
 

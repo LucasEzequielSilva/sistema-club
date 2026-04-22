@@ -33,6 +33,7 @@ interface ProductDialogProps {
 type FormState = {
   name: string;
   categoryId: string;
+  subcategoryId: string;
   supplierId: string;
   barcode: string;
   sku: string;
@@ -49,6 +50,7 @@ type FormState = {
 const EMPTY: FormState = {
   name: "",
   categoryId: "",
+  subcategoryId: "",
   supplierId: "",
   barcode: "",
   sku: "",
@@ -63,6 +65,7 @@ const EMPTY: FormState = {
 };
 
 type Category = { id: string; name: string };
+type Subcategory = { id: string; name: string; categoryId: string };
 type Supplier = { id: string; name: string };
 type AccountConfig = {
   taxStatus: "monotributista" | "responsable_inscripto";
@@ -81,6 +84,7 @@ export function ProductDialog({
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [priceListName, setPriceListName] = useState<string | null>(null);
   const [currentStock, setCurrentStock] = useState<number | null>(null);
@@ -95,6 +99,15 @@ export function ProductDialog({
       .query({ accountId })
       .then((cats: any[]) =>
         setCategories(cats.map((c) => ({ id: c.id, name: c.name })))
+      )
+      .catch(() => {});
+
+    trpc.clasificaciones.listProductSubcategories
+      .query({ accountId, isActive: true })
+      .then((subs: any[]) =>
+        setSubcategories(
+          subs.map((s) => ({ id: s.id, name: s.name, categoryId: s.categoryId }))
+        )
       )
       .catch(() => {});
 
@@ -160,6 +173,7 @@ export function ProductDialog({
           setForm({
             name: p.name,
             categoryId: p.categoryId,
+            subcategoryId: p.subcategoryId ?? "",
             supplierId: p.supplierId ?? "",
             barcode: p.barcode ?? "",
             sku: p.sku ?? "",
@@ -247,6 +261,7 @@ export function ProductDialog({
           id: editingId,
           name: form.name,
           categoryId: form.categoryId,
+          subcategoryId: form.subcategoryId || null,
           supplierId: form.supplierId || null,
           barcode: form.barcode || null,
           sku: form.sku || null,
@@ -266,6 +281,7 @@ export function ProductDialog({
           accountId,
           name: form.name,
           categoryId: form.categoryId,
+          subcategoryId: form.subcategoryId || null,
           supplierId: form.supplierId || null,
           barcode: form.barcode || undefined,
           sku: form.sku || undefined,
@@ -352,7 +368,16 @@ export function ProductDialog({
                 <Select
                   value={form.categoryId}
                   onValueChange={(v) =>
-                    setForm((prev) => ({ ...prev, categoryId: v }))
+                    setForm((prev) => ({
+                      ...prev,
+                      categoryId: v,
+                      // Clear subcategory if it doesn't belong to the new category
+                      subcategoryId:
+                        subcategories.find((s) => s.id === prev.subcategoryId)
+                          ?.categoryId === v
+                          ? prev.subcategoryId
+                          : "",
+                    }))
                   }
                 >
                   <SelectTrigger className="w-full">
@@ -392,6 +417,42 @@ export function ProductDialog({
                 </Select>
               </div>
             </div>
+
+            {/* Subcategory — only shown if the selected category has subcats */}
+            {form.categoryId &&
+              subcategories.some((s) => s.categoryId === form.categoryId) && (
+                <div>
+                  <Label>
+                    Subcategoría{" "}
+                    <span className="text-muted-foreground font-normal text-xs">
+                      (opcional)
+                    </span>
+                  </Label>
+                  <Select
+                    value={form.subcategoryId || "none"}
+                    onValueChange={(v) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        subcategoryId: v === "none" ? "" : v,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Sin subcategoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sin subcategoría</SelectItem>
+                      {subcategories
+                        .filter((s) => s.categoryId === form.categoryId)
+                        .map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
             {/* Barcode + SKU + Unit + Origin */}
             <div className="grid grid-cols-4 gap-3">

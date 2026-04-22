@@ -19,6 +19,7 @@ import { tableroRouter } from "./routers/tablero";
 import { cuadroResumenRouter } from "./routers/cuadro-resumen";
 import { facturacionRouter } from "./routers/facturacion";
 import { usersRouter } from "./routers/users";
+import { adminRouter } from "./routers/admin";
 
 export const appRouter = router({
   clasificaciones: clasificacionesRouter,
@@ -35,6 +36,7 @@ export const appRouter = router({
   cuadroResumen: cuadroResumenRouter,
   facturacion: facturacionRouter,
   users: usersRouter,
+  admin: adminRouter,
 });
 
 // export type definition of API

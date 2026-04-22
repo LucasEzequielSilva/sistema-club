@@ -450,6 +450,7 @@ export const ventasRouter = router({
         markupPct,
         salePrice: Math.round(salePrice * 100) / 100,
         categoryId: product.categoryId,
+        hasListPrice: !!priceListItem && priceListItem.markupPct > 0,
       };
     }),
 
