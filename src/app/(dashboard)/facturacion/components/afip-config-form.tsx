@@ -30,7 +30,7 @@ export function AfipConfigForm({ accountId }: AfipConfigFormProps) {
 
   useEffect(() => {
     trpc.facturacion.getConfig
-      .query({ accountId })
+      .query()
       .then((config) => {
         if (config) {
           setCuit(config.cuit);
@@ -53,7 +53,6 @@ export function AfipConfigForm({ accountId }: AfipConfigFormProps) {
     setSaving(true);
     try {
       await trpc.facturacion.saveConfig.mutate({
-        accountId,
         cuit,
         puntoVenta: parseInt(puntoVenta) || 1,
         accessToken,
@@ -76,9 +75,7 @@ export function AfipConfigForm({ accountId }: AfipConfigFormProps) {
     setTesting(true);
     setTestResult(null);
     try {
-      const result = await trpc.facturacion.testConnection.mutate({
-        accountId,
-      });
+      const result = await trpc.facturacion.testConnection.mutate();
       setTestResult(result);
       if (result.success) {
         toast.success("Conexion exitosa con AFIP");

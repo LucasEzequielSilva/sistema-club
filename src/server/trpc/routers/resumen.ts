@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 
 // ============================================================
@@ -51,17 +51,16 @@ export const resumenRouter = router({
   // INCOME SUMMARY (Resumen de Ingresos)
   // By category, by origin, by product — for a period
   // ——————————————————————————————
-  incomeSummary: publicProcedure
+  incomeSummary: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         dateFrom: z.coerce.date(),
         dateTo: z.coerce.date(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta no encontrada" });
@@ -69,7 +68,7 @@ export const resumenRouter = router({
 
       const sales = await db.sale.findMany({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           saleDate: { gte: input.dateFrom, lte: input.dateTo },
         },
         include: {
@@ -216,18 +215,17 @@ export const resumenRouter = router({
   // EXPENSE SUMMARY (Resumen de Egresos)
   // By cost category, by cost type, by supplier — for a period
   // ——————————————————————————————
-  expenseSummary: publicProcedure
+  expenseSummary: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         dateFrom: z.coerce.date(),
         dateTo: z.coerce.date(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const purchases = await db.purchase.findMany({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           invoiceDate: { gte: input.dateFrom, lte: input.dateTo },
         },
         include: {
@@ -348,17 +346,16 @@ export const resumenRouter = router({
   // ECONOMIC STATEMENT (Estado Económico)
   // Ventas - CV = CM - CF = Resultado Bruto - Impuestos = Resultado Neto
   // ——————————————————————————————
-  economicStatement: publicProcedure
+  economicStatement: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         dateFrom: z.coerce.date(),
         dateTo: z.coerce.date(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta no encontrada" });
@@ -367,7 +364,7 @@ export const resumenRouter = router({
       // ─── Sales ─────────────────────────────────────
       const sales = await db.sale.findMany({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           saleDate: { gte: input.dateFrom, lte: input.dateTo },
         },
       });
@@ -390,7 +387,7 @@ export const resumenRouter = router({
       // ─── Purchases (expenses) ──────────────────────
       const purchases = await db.purchase.findMany({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           invoiceDate: { gte: input.dateFrom, lte: input.dateTo },
         },
         include: {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createSupplierSchema,
@@ -11,20 +11,21 @@ export const proveedoresRouter = router({
   // ——————————————————————————————
   // LIST  (con búsqueda por nombre)
   // ——————————————————————————————
-  list: publicProcedure
+  list: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        search: z.string().optional(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          search: z.string().optional(),
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const suppliers = await db.supplier.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
-          ...(input.search && {
+          accountId: ctx.accountId,
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
+          ...(input?.search && {
             name: { contains: input.search },
           }),
         },
@@ -41,11 +42,11 @@ export const proveedoresRouter = router({
   // ——————————————————————————————
   // GET BY ID  (para el detalle)
   // ——————————————————————————————
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const supplier = await db.supplier.findUnique({
-        where: { id: input.id },
+    .query(async ({ input, ctx }) => {
+      const supplier = await db.supplier.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: {
           purchases: {
             orderBy: { invoiceDate: "desc" },
@@ -73,13 +74,13 @@ export const proveedoresRouter = router({
   // ——————————————————————————————
   // CREATE
   // ——————————————————————————————
-  create: publicProcedure
+  create: protectedProcedure
     .input(createSupplierSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Check for duplicate name within the account
       const existing = await db.supplier.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
         },
       });
@@ -93,7 +94,7 @@ export const proveedoresRouter = router({
 
       return db.supplier.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
           cuit: input.cuit || null,
           phone: input.phone || null,
@@ -107,13 +108,15 @@ export const proveedoresRouter = router({
   // ——————————————————————————————
   // UPDATE
   // ——————————————————————————————
-  update: publicProcedure
+  update: protectedProcedure
     .input(updateSupplierSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...fields } = input;
 
-      // Verify it exists
-      const current = await db.supplier.findUnique({ where: { id } });
+      // Verify it exists and belongs to this account
+      const current = await db.supplier.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!current) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -125,7 +128,7 @@ export const proveedoresRouter = router({
       if (fields.name) {
         const dup = await db.supplier.findFirst({
           where: {
-            accountId: current.accountId,
+            accountId: ctx.accountId,
             name: fields.name,
             id: { not: id },
           },
@@ -155,11 +158,11 @@ export const proveedoresRouter = router({
   // ——————————————————————————————
   // SOFT DELETE  (isActive = false)
   // ——————————————————————————————
-  softDelete: publicProcedure
+  softDelete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const supplier = await db.supplier.findUnique({
-        where: { id: input.id },
+    .mutation(async ({ input, ctx }) => {
+      const supplier = await db.supplier.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: { _count: { select: { purchases: true } } },
       });
 
@@ -179,9 +182,19 @@ export const proveedoresRouter = router({
   // ——————————————————————————————
   // HARD DELETE  (solo si no tiene compras)
   // ——————————————————————————————
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const supplier = await db.supplier.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!supplier) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Proveedor no encontrado",
+        });
+      }
+
       const count = await db.purchase.count({
         where: { supplierId: input.id },
       });
@@ -197,5 +210,3 @@ export const proveedoresRouter = router({
       return { success: true };
     }),
 });
-
-

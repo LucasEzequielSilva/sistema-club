@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 
 // ============================================================
@@ -49,21 +49,20 @@ export const estadosResultadosRouter = router({
   // Cash-based: uses accreditationDate
   // Saldo Anterior + Cobranzas - Pagos = Superávit/Déficit
   // ——————————————————————————————
-  financialStatement: publicProcedure
+  financialStatement: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         year: z.number(),
         month: z.number().min(0).max(11),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const { from, to } = getMonthRange(input.year, input.month);
 
       // Cobranzas: sale payments accredited in this month
       const salePayments = await db.salePayment.findMany({
         where: {
-          sale: { accountId: input.accountId },
+          sale: { accountId: ctx.accountId },
           accreditationDate: { gte: from, lte: to },
         },
         include: {
@@ -74,7 +73,7 @@ export const estadosResultadosRouter = router({
       // Pagos: purchase payments accredited in this month
       const purchasePayments = await db.purchasePayment.findMany({
         where: {
-          purchase: { accountId: input.accountId },
+          purchase: { accountId: ctx.accountId },
           accreditationDate: { gte: from, lte: to },
         },
         include: {
@@ -131,16 +130,15 @@ export const estadosResultadosRouter = router({
   // ——————————————————————————————
   // ANNUAL GRID (12-month economic + financial summary)
   // ——————————————————————————————
-  annualGrid: publicProcedure
+  annualGrid: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         year: z.number(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta no encontrada" });
@@ -152,21 +150,21 @@ export const estadosResultadosRouter = router({
 
       const [sales, purchases, salePayments, purchasePayments] = await Promise.all([
         db.sale.findMany({
-          where: { accountId: input.accountId, saleDate: { gte: yearFrom, lte: yearTo } },
+          where: { accountId: ctx.accountId, saleDate: { gte: yearFrom, lte: yearTo } },
         }),
         db.purchase.findMany({
-          where: { accountId: input.accountId, invoiceDate: { gte: yearFrom, lte: yearTo } },
+          where: { accountId: ctx.accountId, invoiceDate: { gte: yearFrom, lte: yearTo } },
           include: { costCategory: { select: { costType: true } } },
         }),
         db.salePayment.findMany({
           where: {
-            sale: { accountId: input.accountId },
+            sale: { accountId: ctx.accountId },
             accreditationDate: { gte: yearFrom, lte: yearTo },
           },
         }),
         db.purchasePayment.findMany({
           where: {
-            purchase: { accountId: input.accountId },
+            purchase: { accountId: ctx.accountId },
             accreditationDate: { gte: yearFrom, lte: yearTo },
           },
         }),

@@ -206,12 +206,10 @@ export default function VentasPage() {
     setLoading(true);
     try {
       const params: {
-        accountId: string;
         status?: string;
         dateFrom?: Date;
         dateTo?: Date;
       } = {
-        accountId,
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(dateFrom && { dateFrom: new Date(dateFrom) }),
         ...(dateTo && {
@@ -221,13 +219,12 @@ export default function VentasPage() {
       const [result, summaryResult, methodsResult] = await Promise.all([
         trpc.ventas.list.query(params),
         trpc.ventas.getSummary.query({
-          accountId,
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
           ...(dateTo && {
             dateTo: new Date(dateTo + "T23:59:59"),
           }),
         }),
-        trpc.clasificaciones.listPaymentMethods.query({ accountId }),
+        trpc.clasificaciones.listPaymentMethods.query(),
       ]);
       setSales(result as SaleListItem[]);
       setSummary(summaryResult);

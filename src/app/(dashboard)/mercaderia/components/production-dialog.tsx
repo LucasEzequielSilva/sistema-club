@@ -73,7 +73,7 @@ export function ProductionDialog({
     setForm(EMPTY);
 
     trpc.productos.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((prods: any[]) => {
         const fabricados = prods
           .filter((p) => p.origin === "fabricado")

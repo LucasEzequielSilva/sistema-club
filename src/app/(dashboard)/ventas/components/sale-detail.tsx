@@ -141,7 +141,7 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
   useEffect(() => {
     if (!showPaymentDialog || !accountId) return;
     trpc.clasificaciones.listPaymentMethods
-      .query({ accountId })
+      .query()
       .then((methods: any[]) =>
         setPaymentMethods(
           methods

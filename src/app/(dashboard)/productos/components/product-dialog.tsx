@@ -96,14 +96,14 @@ export function ProductDialog({
     if (!open) return;
 
     trpc.clasificaciones.listProductCategories
-      .query({ accountId })
+      .query()
       .then((cats: any[]) =>
         setCategories(cats.map((c) => ({ id: c.id, name: c.name })))
       )
       .catch(() => {});
 
     trpc.clasificaciones.listProductSubcategories
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((subs: any[]) =>
         setSubcategories(
           subs.map((s) => ({ id: s.id, name: s.name, categoryId: s.categoryId }))
@@ -112,7 +112,7 @@ export function ProductDialog({
       .catch(() => {});
 
     trpc.proveedores.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((sups) =>
         setSuppliers(sups.map((s) => ({ id: s.id, name: s.name })))
       )
@@ -278,7 +278,6 @@ export function ProductDialog({
         toast.success(`"${form.name}" actualizado`);
       } else {
         const created = await trpc.productos.create.mutate({
-          accountId,
           name: form.name,
           categoryId: form.categoryId,
           subcategoryId: form.subcategoryId || null,

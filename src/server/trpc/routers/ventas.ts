@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createSaleSchema,
@@ -182,22 +182,23 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // LIST (with filters, computed fields, pagination-ready)
   // ——————————————————————————————
-  list: publicProcedure
+  list: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        search: z.string().optional(),
-        productId: z.string().optional(),
-        clientId: z.string().optional(),
-        status: z.string().optional(), // pending | partial | paid | overdue
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-        invoicedOnly: z.boolean().optional(),
-      })
+      z
+        .object({
+          search: z.string().optional(),
+          productId: z.string().optional(),
+          clientId: z.string().optional(),
+          status: z.string().optional(), // pending | partial | paid | overdue
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+          invoicedOnly: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -208,16 +209,16 @@ export const ventasRouter = router({
 
       const sales = await db.sale.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.productId && { productId: input.productId }),
-          ...(input.clientId && { clientId: input.clientId }),
-          ...(input.status && { status: input.status }),
-          ...(input.invoicedOnly && { invoiced: true }),
-          ...(input.dateFrom || input.dateTo
+          accountId: ctx.accountId,
+          ...(input?.productId && { productId: input.productId }),
+          ...(input?.clientId && { clientId: input.clientId }),
+          ...(input?.status && { status: input.status }),
+          ...(input?.invoicedOnly && { invoiced: true }),
+          ...(input?.dateFrom || input?.dateTo
             ? {
                 saleDate: {
-                  ...(input.dateFrom && { gte: input.dateFrom }),
-                  ...(input.dateTo && { lte: input.dateTo }),
+                  ...(input?.dateFrom && { gte: input.dateFrom }),
+                  ...(input?.dateTo && { lte: input.dateTo }),
                 },
               }
             : {}),
@@ -264,17 +265,18 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // GET SUMMARY (totals for footer)
   // ——————————————————————————————
-  getSummary: publicProcedure
+  getSummary: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-      })
+      z
+        .object({
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -284,17 +286,17 @@ export const ventasRouter = router({
       }
 
       const dateFilter =
-        input.dateFrom || input.dateTo
+        input?.dateFrom || input?.dateTo
           ? {
               saleDate: {
-                ...(input.dateFrom && { gte: input.dateFrom }),
-                ...(input.dateTo && { lte: input.dateTo }),
+                ...(input?.dateFrom && { gte: input.dateFrom }),
+                ...(input?.dateTo && { lte: input.dateTo }),
               },
             }
           : {};
 
       const sales = await db.sale.findMany({
-        where: { accountId: input.accountId, ...dateFilter },
+        where: { accountId: ctx.accountId, ...dateFilter },
         include: { payments: true },
       });
 
@@ -335,11 +337,11 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // GET BY ID (full detail)
   // ——————————————————————————————
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const sale = await db.sale.findUnique({
-        where: { id: input.id },
+    .query(async ({ input, ctx }) => {
+      const sale = await db.sale.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: {
           account: {
             select: { taxStatus: true, ivaRate: true, includeIvaInCost: true },
@@ -392,17 +394,16 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // GET PRODUCT PRICE (for auto-filling unit_price from price list)
   // ——————————————————————————————
-  getProductPrice: publicProcedure
+  getProductPrice: protectedProcedure
     .input(
       z.object({
         productId: z.string(),
         priceListId: z.string(),
-        accountId: z.string(),
       })
     )
-    .query(async ({ input }) => {
-      const product = await db.product.findUnique({
-        where: { id: input.productId },
+    .query(async ({ input, ctx }) => {
+      const product = await db.product.findFirst({
+        where: { id: input.productId, accountId: ctx.accountId },
       });
       if (!product) {
         throw new TRPCError({
@@ -412,7 +413,7 @@ export const ventasRouter = router({
       }
 
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -432,7 +433,7 @@ export const ventasRouter = router({
 
       const historicalCost = await db.stockMovement.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           productId: input.productId,
           unitCost: { not: null },
           movementDate: { lte: new Date() },
@@ -457,12 +458,12 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // CREATE (with stock movement + inline payments)
   // ——————————————————————————————
-  create: publicProcedure
+  create: protectedProcedure
     .input(createSaleSchema)
-    .mutation(async ({ input }) => {
-      // Get product to snapshot unitCost
-      const product = await db.product.findUnique({
-        where: { id: input.productId },
+    .mutation(async ({ input, ctx }) => {
+      // Get product to snapshot unitCost (and validate it belongs to this account)
+      const product = await db.product.findFirst({
+        where: { id: input.productId, accountId: ctx.accountId },
       });
       if (!product) {
         throw new TRPCError({
@@ -472,7 +473,7 @@ export const ventasRouter = router({
       }
 
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -483,7 +484,7 @@ export const ventasRouter = router({
 
       const historicalCost = await db.stockMovement.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           productId: input.productId,
           unitCost: { not: null },
           movementDate: { lte: input.saleDate },
@@ -513,7 +514,7 @@ export const ventasRouter = router({
       // Create sale
       const sale = await db.sale.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           productId: input.productId,
           categoryId: input.categoryId,
           priceListId: input.priceListId || null,
@@ -537,7 +538,7 @@ export const ventasRouter = router({
       if (input.payments.length > 0) {
         for (const payment of input.payments) {
           const routing = await resolvePaymentRouting({
-            accountId: input.accountId,
+            accountId: ctx.accountId,
             paymentMethodId: payment.paymentMethodId,
             paymentChannelId: payment.paymentChannelId,
             paymentAccountId: payment.paymentAccountId,
@@ -561,7 +562,7 @@ export const ventasRouter = router({
       // Create stock movement (negative quantity for sale)
       await db.stockMovement.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           productId: input.productId,
           movementType: "sale",
           quantity: -input.quantity,
@@ -579,13 +580,13 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // UPDATE (no stock recalc — only metadata fields)
   // ——————————————————————————————
-  update: publicProcedure
+  update: protectedProcedure
     .input(updateSaleSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...fields } = input;
 
-      const current = await db.sale.findUnique({
-        where: { id },
+      const current = await db.sale.findFirst({
+        where: { id, accountId: ctx.accountId },
         include: { payments: true },
       });
       if (!current) {
@@ -681,10 +682,12 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // DELETE (reverse stock movement)
   // ——————————————————————————————
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const sale = await db.sale.findUnique({ where: { id: input.id } });
+    .mutation(async ({ input, ctx }) => {
+      const sale = await db.sale.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
       if (!sale) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -709,11 +712,11 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // ADD PAYMENT (post-creation partial payment)
   // ——————————————————————————————
-  addPayment: publicProcedure
+  addPayment: protectedProcedure
     .input(addSalePaymentSchema)
-    .mutation(async ({ input }) => {
-      const sale = await db.sale.findUnique({
-        where: { id: input.saleId },
+    .mutation(async ({ input, ctx }) => {
+      const sale = await db.sale.findFirst({
+        where: { id: input.saleId, accountId: ctx.accountId },
         include: { payments: true, account: true },
       });
       if (!sale) {
@@ -776,11 +779,11 @@ export const ventasRouter = router({
   // ——————————————————————————————
   // REMOVE PAYMENT
   // ——————————————————————————————
-  removePayment: publicProcedure
+  removePayment: protectedProcedure
     .input(z.object({ paymentId: z.string() }))
-    .mutation(async ({ input }) => {
-      const payment = await db.salePayment.findUnique({
-        where: { id: input.paymentId },
+    .mutation(async ({ input, ctx }) => {
+      const payment = await db.salePayment.findFirst({
+        where: { id: input.paymentId, sale: { accountId: ctx.accountId } },
         include: {
           sale: {
             include: { payments: true, account: true },

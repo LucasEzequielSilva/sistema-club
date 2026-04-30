@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createMerchandiseEntrySchema,
@@ -40,27 +40,28 @@ export const mercaderiaRouter = router({
   // ——————————————————————————————
   // LIST MOVEMENTS (all types, with filters)
   // ——————————————————————————————
-  listMovements: publicProcedure
+  listMovements: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        productId: z.string().optional(),
-        movementType: z.string().optional(),
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-      })
+      z
+        .object({
+          productId: z.string().optional(),
+          movementType: z.string().optional(),
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const movements = await db.stockMovement.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.productId && { productId: input.productId }),
-          ...(input.movementType && { movementType: input.movementType }),
-          ...(input.dateFrom || input.dateTo
+          accountId: ctx.accountId,
+          ...(input?.productId && { productId: input.productId }),
+          ...(input?.movementType && { movementType: input.movementType }),
+          ...(input?.dateFrom || input?.dateTo
             ? {
                 movementDate: {
-                  ...(input.dateFrom && { gte: input.dateFrom }),
-                  ...(input.dateTo && { lte: input.dateTo }),
+                  ...(input?.dateFrom && { gte: input.dateFrom }),
+                  ...(input?.dateTo && { lte: input.dateTo }),
                 },
               }
             : {}),
@@ -80,86 +81,80 @@ export const mercaderiaRouter = router({
   // ——————————————————————————————
   // GET STOCK SUMMARY (per product)
   // ——————————————————————————————
-  getStockSummary: publicProcedure
-    .input(
-      z.object({
-        accountId: z.string(),
-      })
-    )
-    .query(async ({ input }) => {
-      const products = await db.product.findMany({
-        where: {
-          accountId: input.accountId,
-          isActive: true,
-        },
-        select: {
-          id: true,
-          name: true,
-          unit: true,
-          initialStock: true,
-          minStock: true,
-          acquisitionCost: true,
-          rawMaterialCost: true,
-          laborCost: true,
-          packagingCost: true,
-        },
-        orderBy: { name: "asc" },
-      });
+  getStockSummary: protectedProcedure.query(async ({ ctx }) => {
+    const products = await db.product.findMany({
+      where: {
+        accountId: ctx.accountId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        initialStock: true,
+        minStock: true,
+        acquisitionCost: true,
+        rawMaterialCost: true,
+        laborCost: true,
+        packagingCost: true,
+      },
+      orderBy: { name: "asc" },
+    });
 
-      // Get aggregated stock movements per product
-      const stockAgg = await db.stockMovement.groupBy({
-        by: ["productId"],
-        where: { accountId: input.accountId },
-        _sum: { quantity: true },
-      });
+    // Get aggregated stock movements per product
+    const stockAgg = await db.stockMovement.groupBy({
+      by: ["productId"],
+      where: { accountId: ctx.accountId },
+      _sum: { quantity: true },
+    });
 
-      const stockMap = new Map(
-        stockAgg.map((s) => [s.productId, s._sum.quantity ?? 0])
-      );
+    const stockMap = new Map(
+      stockAgg.map((s) => [s.productId, s._sum.quantity ?? 0])
+    );
 
-      const summary = products.map((p) => {
-        const movementTotal = stockMap.get(p.id) ?? 0;
-        const currentStock = p.initialStock + movementTotal;
-        const unitCost = calcUnitCost(p);
-        const valuedStock = currentStock * unitCost;
-        const isLowStock = currentStock <= p.minStock;
-
-        return {
-          id: p.id,
-          name: p.name,
-          unit: p.unit,
-          currentStock,
-          minStock: p.minStock,
-          unitCost: Math.round(unitCost * 100) / 100,
-          valuedStock: Math.round(valuedStock * 100) / 100,
-          isLowStock,
-        };
-      });
-
-      // Aggregate totals
-      const totalProducts = summary.length;
-      const totalValued = summary.reduce((sum, p) => sum + p.valuedStock, 0);
-      const lowStockCount = summary.filter((p) => p.isLowStock).length;
+    const summary = products.map((p) => {
+      const movementTotal = stockMap.get(p.id) ?? 0;
+      const currentStock = p.initialStock + movementTotal;
+      const unitCost = calcUnitCost(p);
+      const valuedStock = currentStock * unitCost;
+      const isLowStock = currentStock <= p.minStock;
 
       return {
-        products: summary,
-        totals: {
-          totalProducts,
-          totalValued: Math.round(totalValued * 100) / 100,
-          lowStockCount,
-        },
+        id: p.id,
+        name: p.name,
+        unit: p.unit,
+        currentStock,
+        minStock: p.minStock,
+        unitCost: Math.round(unitCost * 100) / 100,
+        valuedStock: Math.round(valuedStock * 100) / 100,
+        isLowStock,
       };
-    }),
+    });
+
+    // Aggregate totals
+    const totalProducts = summary.length;
+    const totalValued = summary.reduce((sum, p) => sum + p.valuedStock, 0);
+    const lowStockCount = summary.filter((p) => p.isLowStock).length;
+
+    return {
+      products: summary,
+      totals: {
+        totalProducts,
+        totalValued: Math.round(totalValued * 100) / 100,
+        lowStockCount,
+      },
+    };
+  }),
 
   // ——————————————————————————————
   // CREATE MERCHANDISE ENTRY (ingreso de mercadería)
   // ——————————————————————————————
-  createEntry: publicProcedure
+  createEntry: protectedProcedure
     .input(createMerchandiseEntrySchema)
-    .mutation(async ({ input }) => {
-      // Validate product exists
-      const product = await db.product.findUnique({
-        where: { id: input.productId },
+    .mutation(async ({ input, ctx }) => {
+      // Validate product exists in this account
+      const product = await db.product.findFirst({
+        where: { id: input.productId, accountId: ctx.accountId },
       });
       if (!product) {
         throw new TRPCError({
@@ -170,7 +165,7 @@ export const mercaderiaRouter = router({
 
       const movement = await db.stockMovement.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           productId: input.productId,
           movementType: "merchandise_entry",
           quantity: input.quantity, // always positive
@@ -187,12 +182,12 @@ export const mercaderiaRouter = router({
   // ——————————————————————————————
   // CREATE STOCK ADJUSTMENT (ajuste manual)
   // ——————————————————————————————
-  createAdjustment: publicProcedure
+  createAdjustment: protectedProcedure
     .input(createStockAdjustmentSchema)
-    .mutation(async ({ input }) => {
-      // Validate product exists
-      const product = await db.product.findUnique({
-        where: { id: input.productId },
+    .mutation(async ({ input, ctx }) => {
+      // Validate product exists in this account
+      const product = await db.product.findFirst({
+        where: { id: input.productId, accountId: ctx.accountId },
       });
       if (!product) {
         throw new TRPCError({
@@ -209,7 +204,7 @@ export const mercaderiaRouter = router({
 
       const movement = await db.stockMovement.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           productId: input.productId,
           movementType: "adjustment",
           quantity: input.quantity, // can be positive or negative
@@ -226,11 +221,11 @@ export const mercaderiaRouter = router({
   // ——————————————————————————————
   // DELETE MOVEMENT (only for merchandise_entry and adjustment)
   // ——————————————————————————————
-  deleteMovement: publicProcedure
+  deleteMovement: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const movement = await db.stockMovement.findUnique({
-        where: { id: input.id },
+    .mutation(async ({ input, ctx }) => {
+      const movement = await db.stockMovement.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
       });
       if (!movement) {
         throw new TRPCError({

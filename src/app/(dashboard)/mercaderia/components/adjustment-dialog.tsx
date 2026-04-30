@@ -90,7 +90,7 @@ export function StockAdjustmentDialog({
     setForm(EMPTY);
 
     trpc.mercaderia.getStockSummary
-      .query({ accountId })
+      .query()
       .then((result: any) =>
         setProducts(
           result.products.map((p: any) => ({
@@ -149,7 +149,6 @@ export function StockAdjustmentDialog({
     setLoading(true);
     try {
       await trpc.mercaderia.createAdjustment.mutate({
-        accountId,
         productId: form.productId,
         adjustmentType: form.adjustmentType as any,
         quantity: delta,

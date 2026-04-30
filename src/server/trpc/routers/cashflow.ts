@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import { upsertProjectionSchema } from "@/lib/validators/cashflow";
 
@@ -38,16 +38,16 @@ export const cashflowRouter = router({
   // GET WEEKLY PROJECTION for a month
   // Core algorithm: groups pending payments into weekly buckets
   // ——————————————————————————————
-  getWeeklyProjection: publicProcedure
+  getWeeklyProjection: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         year: z.number(),
         month: z.number(), // 0-indexed
       })
     )
-    .query(async ({ input }) => {
-      const { accountId, year, month } = input;
+    .query(async ({ input, ctx }) => {
+      const { year, month } = input;
+      const accountId = ctx.accountId;
       const monthStart = new Date(year, month, 1);
       const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
       const totalDays = daysInMonth(year, month);
@@ -398,20 +398,20 @@ export const cashflowRouter = router({
   // ——————————————————————————————
   // GET ITEMS for a specific week (detail drill-down)
   // ——————————————————————————————
-  getWeekDetail: publicProcedure
+  getWeekDetail: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         year: z.number(),
         month: z.number(),
         weekIndex: z.number().int().min(0).max(4),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       // Re-use the same query logic but return items for a specific week only
       // For simplicity, call the full projection and filter
       // (In production, you'd optimize this)
-      const { accountId, year, month, weekIndex } = input;
+      const { year, month, weekIndex } = input;
+      const accountId = ctx.accountId;
       const monthStart = new Date(year, month, 1);
       const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
 
@@ -609,10 +609,11 @@ export const cashflowRouter = router({
   // ——————————————————————————————
   // UPSERT PROJECTION (manual monthly targets)
   // ——————————————————————————————
-  upsertProjection: publicProcedure
+  upsertProjection: protectedProcedure
     .input(upsertProjectionSchema)
-    .mutation(async ({ input }) => {
-      const { accountId, year, month, ...fields } = input;
+    .mutation(async ({ input, ctx }) => {
+      const { year, month, ...fields } = input;
+      const accountId = ctx.accountId;
 
       return db.projection.upsert({
         where: {

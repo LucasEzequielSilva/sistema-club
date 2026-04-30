@@ -381,21 +381,21 @@ export function PurchaseDialog({
     if (!open) return;
 
     trpc.productos.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((prods: any[]) =>
         setProducts(prods.map((p) => ({ id: p.id, name: p.name, unitCost: p.unitCost ?? 0 })))
       )
       .catch(() => {});
 
     trpc.proveedores.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((supps: any[]) =>
         setSuppliers(supps.map((s) => ({ id: s.id, name: s.name })))
       )
       .catch(() => {});
 
     trpc.clasificaciones.listCostCategories
-      .query({ accountId })
+      .query()
       .then((cats: any[]) =>
         setCostCategories(
           cats.filter((c: any) => c.isActive).map((c: any) => ({
@@ -408,7 +408,7 @@ export function PurchaseDialog({
       .catch(() => {});
 
     trpc.clasificaciones.listPaymentMethods
-      .query({ accountId })
+      .query()
       .then((methods: any[]) =>
         setPaymentMethods(
           methods.filter((m: any) => m.isActive).map((m: any) => ({
@@ -421,7 +421,7 @@ export function PurchaseDialog({
       .catch(() => {});
 
     trpc.clasificaciones.listPaymentChannels
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((channels: any[]) => {
         setPaymentChannels(channels.filter((c: any) => c.isActive));
       })
@@ -554,7 +554,6 @@ export function PurchaseDialog({
           const unitCost = parseFloat(it.unitCost) || 0;
 
           await trpc.compras.create.mutate({
-            accountId,
             supplierId: header.supplierId || null,
             productId: it.productId || null,
             costCategoryId: it.costCategoryId,

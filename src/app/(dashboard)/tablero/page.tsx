@@ -148,7 +148,6 @@ export default function TableroPage() {
     try {
       const range = getDateRange(preset);
       const result = await trpc.tablero.getDashboard.query({
-        accountId,
         dateFrom: range.from,
         dateTo: range.to,
       });

@@ -71,8 +71,8 @@ export function ProductCategoriesTab({
     setLoading(true);
     try {
       const [cats, subs] = await Promise.all([
-        trpc.clasificaciones.listProductCategories.query({ accountId }),
-        trpc.clasificaciones.listProductSubcategories.query({ accountId }),
+        trpc.clasificaciones.listProductCategories.query(),
+        trpc.clasificaciones.listProductSubcategories.query(),
       ]);
       setCategories(cats as Category[]);
       setSubcategories(subs as Subcategory[]);

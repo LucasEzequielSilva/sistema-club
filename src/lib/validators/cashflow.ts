@@ -5,7 +5,6 @@ import { z } from "zod";
 // ============================================================
 
 export const upsertProjectionSchema = z.object({
-  accountId: z.string(),
   year: z.number().int().min(2020).max(2040),
   month: z.number().int().min(0).max(11), // JS month (0-indexed)
   projectedSales: z.number().min(0).optional().nullable(),

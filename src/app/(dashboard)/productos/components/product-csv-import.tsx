@@ -99,7 +99,6 @@ export function ProductCsvImport({ accountId, defaultCategoryId, onSuccess }: Pr
     for (const row of validRows) {
       try {
         await trpc.productos.create.mutate({
-          accountId,
           name: row.nombre,
           categoryId: defaultCategoryId,
           unit: (row.unidad ?? "unidad") as any,

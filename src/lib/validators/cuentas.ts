@@ -5,7 +5,6 @@ import { z } from "zod";
 // ============================================================
 
 export const createBankAccountSchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   name: z.string().min(1, "Nombre es obligatorio").max(100, "Máximo 100 caracteres"),
   initialBalance: z.number().default(0),
   balanceDate: z.coerce.date().optional().nullable(),
@@ -24,7 +23,6 @@ export const updateBankAccountSchema = z.object({
 // ============================================================
 
 export const createCashFlowEntrySchema = z.object({
-  accountId: z.string(),
   bankAccountId: z.string().min(1, "Seleccioná una cuenta"),
   entryDate: z.coerce.date({ message: "Fecha es obligatoria" }),
   movementType: z.enum(["ingreso", "egreso"], { message: "Seleccioná un tipo" }),

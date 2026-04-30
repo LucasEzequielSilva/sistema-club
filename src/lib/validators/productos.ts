@@ -5,7 +5,6 @@ import { z } from "zod";
 // ============================================================
 
 export const createProductSchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   categoryId: z.string().cuid("Categoría es obligatoria"),
   subcategoryId: z.string().cuid("Subcategoría inválida").optional().nullable(),
   supplierId: z.string().cuid("Invalid supplier ID").optional().nullable(),

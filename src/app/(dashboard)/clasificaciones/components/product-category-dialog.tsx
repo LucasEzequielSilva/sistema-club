@@ -76,7 +76,6 @@ export function ProductCategoryDialog({
       } else {
         // Create
         await trpc.clasificaciones.createProductCategory.mutate({
-          accountId,
           name,
           description: description || undefined,
           sortOrder: parseInt(sortOrder),

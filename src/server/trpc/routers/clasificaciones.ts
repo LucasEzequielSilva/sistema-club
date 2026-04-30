@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createProductCategorySchema,
@@ -23,31 +23,32 @@ import { TRPCError } from "@trpc/server";
 
 export const clasificacionesRouter = router({
   // Product Categories
-  listProductCategories: publicProcedure
+  listProductCategories: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const categories = await db.productCategory.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
+          accountId: ctx.accountId,
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
         },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       });
       return categories;
     }),
 
-  createProductCategory: publicProcedure
+  createProductCategory: protectedProcedure
     .input(createProductCategorySchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Check for duplicate name
       const existing = await db.productCategory.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
         },
       });
@@ -60,16 +61,31 @@ export const clasificacionesRouter = router({
       }
 
       const category = await db.productCategory.create({
-        data: input,
+        data: {
+          accountId: ctx.accountId,
+          name: input.name,
+          description: input.description,
+          sortOrder: input.sortOrder,
+        },
       });
 
       return category;
     }),
 
-  updateProductCategory: publicProcedure
+  updateProductCategory: protectedProcedure
     .input(updateProductCategorySchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+
+      const current = await db.productCategory.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
+      if (!current) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Clasificación no encontrada",
+        });
+      }
 
       // Remove undefined values
       const cleanData = Object.fromEntries(
@@ -78,20 +94,9 @@ export const clasificacionesRouter = router({
 
       // Check for duplicate name if changing it
       if (data.name) {
-        const current = await db.productCategory.findUnique({
-          where: { id },
-        });
-
-        if (!current) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Clasificación no encontrada",
-          });
-        }
-
         const existing = await db.productCategory.findFirst({
           where: {
-            accountId: current.accountId,
+            accountId: ctx.accountId,
             name: data.name,
             id: {
               not: id,
@@ -115,9 +120,19 @@ export const clasificacionesRouter = router({
       return category;
     }),
 
-  deleteProductCategory: publicProcedure
+  deleteProductCategory: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const category = await db.productCategory.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!category) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Clasificación no encontrada",
+        });
+      }
+
       // Check if there are products using this category
       const productsCount = await db.product.count({
         where: {
@@ -143,20 +158,21 @@ export const clasificacionesRouter = router({
   // PRODUCT SUBCATEGORIES
   // ===========================
 
-  listProductSubcategories: publicProcedure
+  listProductSubcategories: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        categoryId: z.string().optional(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          categoryId: z.string().optional(),
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       return db.productSubcategory.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.categoryId && { categoryId: input.categoryId }),
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
+          accountId: ctx.accountId,
+          ...(input?.categoryId && { categoryId: input.categoryId }),
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
         },
         include: {
           category: { select: { id: true, name: true } },
@@ -165,11 +181,11 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  createProductSubcategory: publicProcedure
+  createProductSubcategory: protectedProcedure
     .input(createProductSubcategorySchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const category = await db.productCategory.findFirst({
-        where: { id: input.categoryId, accountId: input.accountId },
+        where: { id: input.categoryId, accountId: ctx.accountId },
       });
       if (!category) {
         throw new TRPCError({
@@ -190,7 +206,7 @@ export const clasificacionesRouter = router({
 
       return db.productSubcategory.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           categoryId: input.categoryId,
           name: input.name,
           description: input.description,
@@ -199,12 +215,14 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  updateProductSubcategory: publicProcedure
+  updateProductSubcategory: protectedProcedure
     .input(updateProductSubcategorySchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
 
-      const current = await db.productSubcategory.findUnique({ where: { id } });
+      const current = await db.productSubcategory.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!current) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -236,9 +254,19 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  deleteProductSubcategory: publicProcedure
+  deleteProductSubcategory: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const subcat = await db.productSubcategory.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!subcat) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Subcategoría no encontrada",
+        });
+      }
+
       const productsCount = await db.product.count({
         where: { subcategoryId: input.id },
       });
@@ -258,33 +286,34 @@ export const clasificacionesRouter = router({
   // COST CATEGORIES
   // ===========================
 
-  listCostCategories: publicProcedure
+  listCostCategories: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        costType: z.enum(["variable", "fijo", "impuestos"]).optional(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          costType: z.enum(["variable", "fijo", "impuestos"]).optional(),
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const categories = await db.costCategory.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.costType && { costType: input.costType }),
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
+          accountId: ctx.accountId,
+          ...(input?.costType && { costType: input.costType }),
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
         },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       });
       return categories;
     }),
 
-  createCostCategory: publicProcedure
+  createCostCategory: protectedProcedure
     .input(createCostCategorySchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Check for duplicate name
       const existing = await db.costCategory.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
         },
       });
@@ -297,21 +326,38 @@ export const clasificacionesRouter = router({
       }
 
       const category = await db.costCategory.create({
-        data: input,
+        data: {
+          accountId: ctx.accountId,
+          name: input.name,
+          costType: input.costType,
+          description: input.description,
+          sortOrder: input.sortOrder,
+        },
       });
 
       return category;
     }),
 
-  updateCostCategory: publicProcedure
+  updateCostCategory: protectedProcedure
     .input(updateCostCategorySchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+
+      const current = await db.costCategory.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
+      if (!current) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Clasificación de costo no encontrada",
+        });
+      }
 
       // Check for duplicate name if changing it
       if (data.name) {
         const existing = await db.costCategory.findFirst({
           where: {
+            accountId: ctx.accountId,
             name: data.name,
             id: {
               not: id,
@@ -351,9 +397,19 @@ export const clasificacionesRouter = router({
       return category;
     }),
 
-  deleteCostCategory: publicProcedure
+  deleteCostCategory: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const cat = await db.costCategory.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!cat) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Clasificación de costo no encontrada",
+        });
+      }
+
       // Check if there are purchases using this category
       const purchasesCount = await db.purchase.count({
         where: {
@@ -379,100 +435,99 @@ export const clasificacionesRouter = router({
   // PAYMENT METHODS
   // ===========================
 
-  bootstrapPaymentRouting: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .mutation(async ({ input }) => {
-      let defaultAccount = await db.paymentAccount.findFirst({
-        where: { accountId: input.accountId, isDefault: true, isActive: true },
+  bootstrapPaymentRouting: protectedProcedure.mutation(async ({ ctx }) => {
+    let defaultAccount = await db.paymentAccount.findFirst({
+      where: { accountId: ctx.accountId, isDefault: true, isActive: true },
+    });
+
+    if (!defaultAccount) {
+      defaultAccount = await db.paymentAccount.create({
+        data: {
+          accountId: ctx.accountId,
+          name: "Cuenta principal",
+          provider: "interna",
+          isDefault: true,
+        },
+      });
+    }
+
+    const methods = await db.paymentMethod.findMany({
+      where: { accountId: ctx.accountId, isActive: true },
+      orderBy: { name: "asc" },
+    });
+
+    let createdChannels = 0;
+    for (const method of methods) {
+      const existing = await db.paymentChannel.findFirst({
+        where: {
+          accountId: ctx.accountId,
+          paymentMethodId: method.id,
+        },
       });
 
-      if (!defaultAccount) {
-        defaultAccount = await db.paymentAccount.create({
+      if (!existing) {
+        await db.paymentChannel.create({
           data: {
-            accountId: input.accountId,
-            name: "Cuenta principal",
-            provider: "interna",
-            isDefault: true,
-          },
-        });
-      }
-
-      const methods = await db.paymentMethod.findMany({
-        where: { accountId: input.accountId, isActive: true },
-        orderBy: { name: "asc" },
-      });
-
-      let createdChannels = 0;
-      for (const method of methods) {
-        const existing = await db.paymentChannel.findFirst({
-          where: {
-            accountId: input.accountId,
+            accountId: ctx.accountId,
+            paymentAccountId: defaultAccount.id,
             paymentMethodId: method.id,
+            name: method.name,
+            accreditationDays: method.accreditationDays,
+            feePct: 0,
           },
         });
-
-        if (!existing) {
-          await db.paymentChannel.create({
-            data: {
-              accountId: input.accountId,
-              paymentAccountId: defaultAccount.id,
-              paymentMethodId: method.id,
-              name: method.name,
-              accreditationDays: method.accreditationDays,
-              feePct: 0,
-            },
-          });
-          createdChannels += 1;
-        }
+        createdChannels += 1;
       }
+    }
 
-      const hasDefaultChannel = await db.paymentChannel.findFirst({
-        where: { accountId: input.accountId, isDefault: true, isActive: true },
+    const hasDefaultChannel = await db.paymentChannel.findFirst({
+      where: { accountId: ctx.accountId, isDefault: true, isActive: true },
+    });
+
+    if (!hasDefaultChannel) {
+      const firstChannel = await db.paymentChannel.findFirst({
+        where: { accountId: ctx.accountId, isActive: true },
+        orderBy: [{ name: "asc" }, { createdAt: "asc" }],
       });
-
-      if (!hasDefaultChannel) {
-        const firstChannel = await db.paymentChannel.findFirst({
-          where: { accountId: input.accountId, isActive: true },
-          orderBy: [{ name: "asc" }, { createdAt: "asc" }],
+      if (firstChannel) {
+        await db.paymentChannel.update({
+          where: { id: firstChannel.id },
+          data: { isDefault: true },
         });
-        if (firstChannel) {
-          await db.paymentChannel.update({
-            where: { id: firstChannel.id },
-            data: { isDefault: true },
-          });
-        }
       }
+    }
 
-      return {
-        paymentAccountId: defaultAccount.id,
-        createdChannels,
-        methodsCount: methods.length,
-      };
-    }),
+    return {
+      paymentAccountId: defaultAccount.id,
+      createdChannels,
+      methodsCount: methods.length,
+    };
+  }),
 
-  listPaymentAccounts: publicProcedure
+  listPaymentAccounts: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       return db.paymentAccount.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
+          accountId: ctx.accountId,
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
         },
         orderBy: [{ isDefault: "desc" }, { name: "asc" }],
       });
     }),
 
-  createPaymentAccount: publicProcedure
+  createPaymentAccount: protectedProcedure
     .input(createPaymentAccountSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const existing = await db.paymentAccount.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
         },
       });
@@ -486,21 +541,21 @@ export const clasificacionesRouter = router({
 
       const hasDefault =
         (await db.paymentAccount.count({
-          where: { accountId: input.accountId, isDefault: true, isActive: true },
+          where: { accountId: ctx.accountId, isDefault: true, isActive: true },
         })) > 0;
 
       const makeDefault = input.isDefault || !hasDefault;
 
       if (makeDefault) {
         await db.paymentAccount.updateMany({
-          where: { accountId: input.accountId },
+          where: { accountId: ctx.accountId },
           data: { isDefault: false },
         });
       }
 
       return db.paymentAccount.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
           provider: input.provider || null,
           identifier: input.identifier || null,
@@ -509,12 +564,14 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  updatePaymentAccount: publicProcedure
+  updatePaymentAccount: protectedProcedure
     .input(updatePaymentAccountSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
 
-      const current = await db.paymentAccount.findUnique({ where: { id } });
+      const current = await db.paymentAccount.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!current) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta receptora no encontrada" });
       }
@@ -522,7 +579,7 @@ export const clasificacionesRouter = router({
       if (data.name) {
         const existing = await db.paymentAccount.findFirst({
           where: {
-            accountId: current.accountId,
+            accountId: ctx.accountId,
             name: data.name,
             id: { not: id },
           },
@@ -537,7 +594,7 @@ export const clasificacionesRouter = router({
 
       if (data.isDefault) {
         await db.paymentAccount.updateMany({
-          where: { accountId: current.accountId },
+          where: { accountId: ctx.accountId },
           data: { isDefault: false },
         });
       }
@@ -554,9 +611,16 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  deletePaymentAccount: publicProcedure
+  deletePaymentAccount: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const acc = await db.paymentAccount.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!acc) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta receptora no encontrada" });
+      }
+
       const channelsCount = await db.paymentChannel.count({
         where: { paymentAccountId: input.id },
       });
@@ -579,18 +643,19 @@ export const clasificacionesRouter = router({
       return { success: true };
     }),
 
-  listPaymentChannels: publicProcedure
+  listPaymentChannels: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       return db.paymentChannel.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
+          accountId: ctx.accountId,
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
         },
         include: {
           paymentAccount: { select: { id: true, name: true, isDefault: true } },
@@ -600,12 +665,12 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  createPaymentChannel: publicProcedure
+  createPaymentChannel: protectedProcedure
     .input(createPaymentChannelSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const existing = await db.paymentChannel.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
         },
       });
@@ -617,7 +682,7 @@ export const clasificacionesRouter = router({
       }
 
       const account = await db.paymentAccount.findFirst({
-        where: { id: input.paymentAccountId, accountId: input.accountId },
+        where: { id: input.paymentAccountId, accountId: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -628,7 +693,7 @@ export const clasificacionesRouter = router({
 
       if (input.paymentMethodId) {
         const method = await db.paymentMethod.findFirst({
-          where: { id: input.paymentMethodId, accountId: input.accountId },
+          where: { id: input.paymentMethodId, accountId: ctx.accountId },
         });
         if (!method) {
           throw new TRPCError({
@@ -640,20 +705,20 @@ export const clasificacionesRouter = router({
 
       const hasDefault =
         (await db.paymentChannel.count({
-          where: { accountId: input.accountId, isDefault: true, isActive: true },
+          where: { accountId: ctx.accountId, isDefault: true, isActive: true },
         })) > 0;
 
       const makeDefault = input.isDefault || !hasDefault;
       if (makeDefault) {
         await db.paymentChannel.updateMany({
-          where: { accountId: input.accountId },
+          where: { accountId: ctx.accountId },
           data: { isDefault: false },
         });
       }
 
       return db.paymentChannel.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           paymentAccountId: input.paymentAccountId,
           paymentMethodId: input.paymentMethodId || null,
           name: input.name,
@@ -664,12 +729,14 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  updatePaymentChannel: publicProcedure
+  updatePaymentChannel: protectedProcedure
     .input(updatePaymentChannelSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
 
-      const current = await db.paymentChannel.findUnique({ where: { id } });
+      const current = await db.paymentChannel.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!current) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Canal no encontrado" });
       }
@@ -677,7 +744,7 @@ export const clasificacionesRouter = router({
       if (data.name) {
         const existing = await db.paymentChannel.findFirst({
           where: {
-            accountId: current.accountId,
+            accountId: ctx.accountId,
             name: data.name,
             id: { not: id },
           },
@@ -692,7 +759,7 @@ export const clasificacionesRouter = router({
 
       if (data.paymentAccountId) {
         const account = await db.paymentAccount.findFirst({
-          where: { id: data.paymentAccountId, accountId: current.accountId },
+          where: { id: data.paymentAccountId, accountId: ctx.accountId },
         });
         if (!account) {
           throw new TRPCError({
@@ -704,7 +771,7 @@ export const clasificacionesRouter = router({
 
       if (data.paymentMethodId) {
         const method = await db.paymentMethod.findFirst({
-          where: { id: data.paymentMethodId, accountId: current.accountId },
+          where: { id: data.paymentMethodId, accountId: ctx.accountId },
         });
         if (!method) {
           throw new TRPCError({
@@ -716,7 +783,7 @@ export const clasificacionesRouter = router({
 
       if (data.isDefault) {
         await db.paymentChannel.updateMany({
-          where: { accountId: current.accountId },
+          where: { accountId: ctx.accountId },
           data: { isDefault: false },
         });
       }
@@ -741,9 +808,16 @@ export const clasificacionesRouter = router({
       });
     }),
 
-  deletePaymentChannel: publicProcedure
+  deletePaymentChannel: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const channel = await db.paymentChannel.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!channel) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Canal no encontrado" });
+      }
+
       const salePaymentsCount = await db.salePayment.count({
         where: { paymentChannelId: input.id },
       });
@@ -763,31 +837,32 @@ export const clasificacionesRouter = router({
       return { success: true };
     }),
 
-  listPaymentMethods: publicProcedure
+  listPaymentMethods: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        isActive: z.boolean().optional(),
-      })
+      z
+        .object({
+          isActive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const methods = await db.paymentMethod.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
+          accountId: ctx.accountId,
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
         },
         orderBy: { name: "asc" },
       });
       return methods;
     }),
 
-  createPaymentMethod: publicProcedure
+  createPaymentMethod: protectedProcedure
     .input(createPaymentMethodSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Check for duplicate name
       const existing = await db.paymentMethod.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
         },
       });
@@ -800,12 +875,16 @@ export const clasificacionesRouter = router({
       }
 
       const method = await db.paymentMethod.create({
-        data: input,
+        data: {
+          accountId: ctx.accountId,
+          name: input.name,
+          accreditationDays: input.accreditationDays,
+        },
       });
 
       const defaultAccount = await db.paymentAccount.findFirst({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           isDefault: true,
           isActive: true,
         },
@@ -814,7 +893,7 @@ export const clasificacionesRouter = router({
       if (defaultAccount) {
         await db.paymentChannel.create({
           data: {
-            accountId: input.accountId,
+            accountId: ctx.accountId,
             paymentAccountId: defaultAccount.id,
             paymentMethodId: method.id,
             name: method.name,
@@ -827,15 +906,26 @@ export const clasificacionesRouter = router({
       return method;
     }),
 
-  updatePaymentMethod: publicProcedure
+  updatePaymentMethod: protectedProcedure
     .input(updatePaymentMethodSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...data } = input;
+
+      const current = await db.paymentMethod.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
+      if (!current) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Método de pago no encontrado",
+        });
+      }
 
       // Check for duplicate name if changing it
       if (data.name) {
         const existing = await db.paymentMethod.findFirst({
           where: {
+            accountId: ctx.accountId,
             name: data.name,
             id: {
               not: id,
@@ -866,9 +956,19 @@ export const clasificacionesRouter = router({
       return method;
     }),
 
-  deletePaymentMethod: publicProcedure
+  deletePaymentMethod: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const method = await db.paymentMethod.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!method) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Método de pago no encontrado",
+        });
+      }
+
       // Check if there are payments using this method
       const salePaymentsCount = await db.salePayment.count({
         where: {

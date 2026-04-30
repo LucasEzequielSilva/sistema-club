@@ -68,7 +68,6 @@ export default function ProveedoresPage() {
     setLoading(true);
     try {
       const result = await trpc.proveedores.list.query({
-        accountId,
         search: search.trim() || undefined,
       });
       setSuppliers(result as Supplier[]);

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   saveAfipConfigSchema,
@@ -57,39 +57,37 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // GET AFIP CONFIG
   // ——————————————————————————————
-  getConfig: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .query(async ({ input }) => {
-      const config = await db.afipConfig.findUnique({
-        where: { accountId: input.accountId },
-      });
-      if (!config) return null;
+  getConfig: protectedProcedure.query(async ({ ctx }) => {
+    const config = await db.afipConfig.findUnique({
+      where: { accountId: ctx.accountId },
+    });
+    if (!config) return null;
 
-      return {
-        id: config.id,
-        cuit: config.cuit,
-        puntoVenta: config.puntoVenta,
-        accessToken: config.accessToken,
-        hasCert: !!config.cert,
-        hasKey: !!config.privateKey,
-        isProduction: config.isProduction,
-        updatedAt: config.updatedAt,
-      };
-    }),
+    return {
+      id: config.id,
+      cuit: config.cuit,
+      puntoVenta: config.puntoVenta,
+      accessToken: config.accessToken,
+      hasCert: !!config.cert,
+      hasKey: !!config.privateKey,
+      isProduction: config.isProduction,
+      updatedAt: config.updatedAt,
+    };
+  }),
 
   // ——————————————————————————————
   // SAVE AFIP CONFIG
   // ——————————————————————————————
-  saveConfig: publicProcedure
+  saveConfig: protectedProcedure
     .input(saveAfipConfigSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const existing = await db.afipConfig.findUnique({
-        where: { accountId: input.accountId },
+        where: { accountId: ctx.accountId },
       });
 
       if (existing) {
         return db.afipConfig.update({
-          where: { accountId: input.accountId },
+          where: { accountId: ctx.accountId },
           data: {
             cuit: input.cuit,
             puntoVenta: input.puntoVenta,
@@ -103,7 +101,7 @@ export const facturacionRouter = router({
 
       return db.afipConfig.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           cuit: input.cuit,
           puntoVenta: input.puntoVenta,
           accessToken: input.accessToken,
@@ -117,39 +115,36 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // TEST AFIP CONNECTION
   // ——————————————————————————————
-  testConnection: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .mutation(async ({ input }) => {
-      const config = await getAfipConfig(input.accountId);
-      try {
-        const status = await testAfipConnection(config);
-        return {
-          success: true,
-          appServer: status.AppServer,
-          dbServer: status.DbServer,
-          authServer: status.AuthServer,
-        };
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : "Error desconocido";
-        return {
-          success: false,
-          error: message,
-        };
-      }
-    }),
+  testConnection: protectedProcedure.mutation(async ({ ctx }) => {
+    const config = await getAfipConfig(ctx.accountId);
+    try {
+      const status = await testAfipConnection(config);
+      return {
+        success: true,
+        appServer: status.AppServer,
+        dbServer: status.DbServer,
+        authServer: status.AuthServer,
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Error desconocido";
+      return {
+        success: false,
+        error: message,
+      };
+    }
+  }),
 
   // ——————————————————————————————
   // GET LAST INVOICE NUMBER
   // ——————————————————————————————
-  getLastNumber: publicProcedure
+  getLastNumber: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         invoiceType: z.number().int(),
       })
     )
-    .query(async ({ input }) => {
-      const config = await getAfipConfig(input.accountId);
+    .query(async ({ input, ctx }) => {
+      const config = await getAfipConfig(ctx.accountId);
       try {
         const lastNumber = await getLastVoucherNumber(
           config,
@@ -169,46 +164,44 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // GET UNINVOICED SALES (for linking)
   // ——————————————————————————————
-  getUninvoicedSales: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .query(async ({ input }) => {
-      const sales = await db.sale.findMany({
-        where: {
-          accountId: input.accountId,
-          invoiced: false,
-        },
-        orderBy: { saleDate: "desc" },
-        take: 50,
-        include: {
-          product: { select: { name: true } },
-          client: { select: { name: true, cuit: true, clientType: true } },
-        },
-      });
+  getUninvoicedSales: protectedProcedure.query(async ({ ctx }) => {
+    const sales = await db.sale.findMany({
+      where: {
+        accountId: ctx.accountId,
+        invoiced: false,
+      },
+      orderBy: { saleDate: "desc" },
+      take: 50,
+      include: {
+        product: { select: { name: true } },
+        client: { select: { name: true, cuit: true, clientType: true } },
+      },
+    });
 
-      return sales.map((sale) => ({
-        id: sale.id,
-        saleDate: sale.saleDate,
-        productName: sale.product.name,
-        clientName: sale.client?.name ?? null,
-        clientCuit: sale.client?.cuit ?? null,
-        quantity: sale.quantity,
-        unitPrice: sale.unitPrice,
-        discountPct: sale.discountPct,
-        subtotal: Math.round(calcSaleTotal(sale) * 100) / 100,
-        origin: sale.origin,
-      }));
-    }),
+    return sales.map((sale) => ({
+      id: sale.id,
+      saleDate: sale.saleDate,
+      productName: sale.product.name,
+      clientName: sale.client?.name ?? null,
+      clientCuit: sale.client?.cuit ?? null,
+      quantity: sale.quantity,
+      unitPrice: sale.unitPrice,
+      discountPct: sale.discountPct,
+      subtotal: Math.round(calcSaleTotal(sale) * 100) / 100,
+      origin: sale.origin,
+    }));
+  }),
 
   // ——————————————————————————————
   // CREATE INVOICE (calls AFIP)
   // ——————————————————————————————
-  create: publicProcedure
+  create: protectedProcedure
     .input(createInvoiceSchema)
-    .mutation(async ({ input }) => {
-      const config = await getAfipConfig(input.accountId);
+    .mutation(async ({ input, ctx }) => {
+      const config = await getAfipConfig(ctx.accountId);
 
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -260,7 +253,7 @@ export const facturacionRouter = router({
       // Save invoice to database
       const invoice = await db.invoice.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           saleId: input.saleId || null,
           invoiceType: input.invoiceType,
           invoiceTypeName,
@@ -282,8 +275,19 @@ export const facturacionRouter = router({
         },
       });
 
-      // If linked to a sale, mark it as invoiced
+      // If linked to a sale, mark it as invoiced (validate it belongs to this account)
       if (input.saleId) {
+        const linkedSale = await db.sale.findFirst({
+          where: { id: input.saleId, accountId: ctx.accountId },
+          select: { id: true },
+        });
+        if (!linkedSale) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Venta vinculada no encontrada",
+          });
+        }
+
         const formattedNumber = formatInvoiceNumber(
           config.puntoVenta,
           afipResult.voucherNumber
@@ -318,30 +322,31 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // LIST INVOICES
   // ——————————————————————————————
-  list: publicProcedure
+  list: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        invoiceType: z.number().int().optional(),
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-        search: z.string().optional(),
-      })
+      z
+        .object({
+          invoiceType: z.number().int().optional(),
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+          search: z.string().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const invoices = await db.invoice.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.invoiceType && { invoiceType: input.invoiceType }),
-          ...(input.dateFrom || input.dateTo
+          accountId: ctx.accountId,
+          ...(input?.invoiceType && { invoiceType: input.invoiceType }),
+          ...(input?.dateFrom || input?.dateTo
             ? {
                 invoiceDate: {
-                  ...(input.dateFrom && { gte: input.dateFrom }),
-                  ...(input.dateTo && { lte: input.dateTo }),
+                  ...(input?.dateFrom && { gte: input.dateFrom }),
+                  ...(input?.dateTo && { lte: input.dateTo }),
                 },
               }
             : {}),
-          ...(input.search && {
+          ...(input?.search && {
             OR: [
               { customerName: { contains: input.search } },
               { docNro: { contains: input.search } },
@@ -370,11 +375,11 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // GET INVOICE BY ID
   // ——————————————————————————————
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const invoice = await db.invoice.findUnique({
-        where: { id: input.id },
+    .query(async ({ input, ctx }) => {
+      const invoice = await db.invoice.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: {
           sale: {
             select: {
@@ -413,27 +418,28 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // GET SUMMARY
   // ——————————————————————————————
-  getSummary: publicProcedure
+  getSummary: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-      })
+      z
+        .object({
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const dateFilter =
-        input.dateFrom || input.dateTo
+        input?.dateFrom || input?.dateTo
           ? {
               invoiceDate: {
-                ...(input.dateFrom && { gte: input.dateFrom }),
-                ...(input.dateTo && { lte: input.dateTo }),
+                ...(input?.dateFrom && { gte: input.dateFrom }),
+                ...(input?.dateTo && { lte: input.dateTo }),
               },
             }
           : {};
 
       const invoices = await db.invoice.findMany({
-        where: { accountId: input.accountId, ...dateFilter },
+        where: { accountId: ctx.accountId, ...dateFilter },
       });
 
       let totalNeto = 0;
@@ -466,16 +472,15 @@ export const facturacionRouter = router({
   // ——————————————————————————————
   // HELPER: Determine invoice type for account
   // ——————————————————————————————
-  getInvoiceTypeForAccount: publicProcedure
+  getInvoiceTypeForAccount: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         docTipo: z.number().int(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({

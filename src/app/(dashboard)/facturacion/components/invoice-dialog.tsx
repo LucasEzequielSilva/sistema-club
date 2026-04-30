@@ -106,9 +106,8 @@ export function InvoiceDialog({
 
     setLoading(true);
     Promise.all([
-      trpc.facturacion.getUninvoicedSales.query({ accountId }),
+      trpc.facturacion.getUninvoicedSales.query(),
       trpc.facturacion.getInvoiceTypeForAccount.query({
-        accountId,
         docTipo: parseInt(docTipo),
       }),
     ])
@@ -127,7 +126,7 @@ export function InvoiceDialog({
   useEffect(() => {
     if (!open) return;
     trpc.facturacion.getInvoiceTypeForAccount
-      .query({ accountId, docTipo: parseInt(docTipo) })
+      .query({ docTipo: parseInt(docTipo) })
       .then((info) => {
         setInvoiceType(info.invoiceType);
         setInvoiceTypeName(info.invoiceTypeName);
@@ -211,7 +210,6 @@ export function InvoiceDialog({
     setSubmitting(true);
     try {
       const result = await trpc.facturacion.create.mutate({
-        accountId,
         saleId: mode === "sale" && selectedSaleId ? selectedSaleId : null,
         invoiceType,
         concepto: 1, // Products

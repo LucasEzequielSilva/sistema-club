@@ -80,7 +80,6 @@ export function ProductSubcategoryDialog({
         toast.success("Subcategoría actualizada");
       } else {
         await trpc.clasificaciones.createProductSubcategory.mutate({
-          accountId,
           categoryId,
           name,
           description: description || undefined,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createBankAccountSchema,
@@ -24,18 +24,19 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // LIST BANK ACCOUNTS (with computed balance)
   // ——————————————————————————————
-  listAccounts: publicProcedure
+  listAccounts: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        includeInactive: z.boolean().optional(),
-      })
+      z
+        .object({
+          includeInactive: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const accounts = await db.bankAccount.findMany({
         where: {
-          accountId: input.accountId,
-          ...(!input.includeInactive && { isActive: true }),
+          accountId: ctx.accountId,
+          ...(!input?.includeInactive && { isActive: true }),
         },
         orderBy: { name: "asc" },
         include: {
@@ -74,12 +75,12 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // CREATE BANK ACCOUNT
   // ——————————————————————————————
-  createAccount: publicProcedure
+  createAccount: protectedProcedure
     .input(createBankAccountSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const account = await db.bankAccount.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           name: input.name,
           initialBalance: input.initialBalance,
           balanceDate: input.balanceDate || null,
@@ -91,11 +92,13 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // UPDATE BANK ACCOUNT
   // ——————————————————————————————
-  updateAccount: publicProcedure
+  updateAccount: protectedProcedure
     .input(updateBankAccountSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...fields } = input;
-      const existing = await db.bankAccount.findUnique({ where: { id } });
+      const existing = await db.bankAccount.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta no encontrada" });
       }
@@ -114,11 +117,11 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // DELETE BANK ACCOUNT (only if no entries)
   // ——————————————————————————————
-  deleteAccount: publicProcedure
+  deleteAccount: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const account = await db.bankAccount.findUnique({
-        where: { id: input.id },
+    .mutation(async ({ input, ctx }) => {
+      const account = await db.bankAccount.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: { _count: { select: { cashFlowEntries: true } } },
       });
       if (!account) {
@@ -139,20 +142,19 @@ export const cuentasRouter = router({
   // GET CASH FLOW (movements for a bank account in a period)
   // Combines CashFlowEntry manual entries + auto-derived from payments
   // ——————————————————————————————
-  getCashFlow: publicProcedure
+  getCashFlow: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         bankAccountId: z.string().optional(), // if not provided, all accounts
         dateFrom: z.coerce.date(),
         dateTo: z.coerce.date(),
       })
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       // Get manual cash flow entries
       const entries = await db.cashFlowEntry.findMany({
         where: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           ...(input.bankAccountId && { bankAccountId: input.bankAccountId }),
           entryDate: { gte: input.dateFrom, lte: input.dateTo },
         },
@@ -165,7 +167,7 @@ export const cuentasRouter = router({
       // Also get sale payments (cobranzas) accredited in period
       const salePayments = await db.salePayment.findMany({
         where: {
-          sale: { accountId: input.accountId },
+          sale: { accountId: ctx.accountId },
           accreditationDate: { gte: input.dateFrom, lte: input.dateTo },
         },
         include: {
@@ -183,7 +185,7 @@ export const cuentasRouter = router({
       // Get purchase payments (pagos) accredited in period
       const purchasePayments = await db.purchasePayment.findMany({
         where: {
-          purchase: { accountId: input.accountId },
+          purchase: { accountId: ctx.accountId },
           accreditationDate: { gte: input.dateFrom, lte: input.dateTo },
         },
         include: {
@@ -278,12 +280,12 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // CREATE MANUAL CASH FLOW ENTRY
   // ——————————————————————————————
-  createEntry: publicProcedure
+  createEntry: protectedProcedure
     .input(createCashFlowEntrySchema)
-    .mutation(async ({ input }) => {
-      // Verify bank account exists
-      const account = await db.bankAccount.findUnique({
-        where: { id: input.bankAccountId },
+    .mutation(async ({ input, ctx }) => {
+      // Verify bank account exists and belongs to this account
+      const account = await db.bankAccount.findFirst({
+        where: { id: input.bankAccountId, accountId: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Cuenta bancaria no encontrada" });
@@ -291,7 +293,7 @@ export const cuentasRouter = router({
 
       return db.cashFlowEntry.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           bankAccountId: input.bankAccountId,
           entryDate: input.entryDate,
           movementType: input.movementType,
@@ -305,11 +307,11 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // DELETE MANUAL CASH FLOW ENTRY (only manual ones)
   // ——————————————————————————————
-  deleteEntry: publicProcedure
+  deleteEntry: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const entry = await db.cashFlowEntry.findUnique({
-        where: { id: input.id },
+    .mutation(async ({ input, ctx }) => {
+      const entry = await db.cashFlowEntry.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
       });
       if (!entry) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Movimiento no encontrado" });
@@ -329,42 +331,40 @@ export const cuentasRouter = router({
   // ——————————————————————————————
   // GET BALANCES SUMMARY (all accounts)
   // ——————————————————————————————
-  getBalancesSummary: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .query(async ({ input }) => {
-      const accounts = await db.bankAccount.findMany({
-        where: { accountId: input.accountId, isActive: true },
-        include: { cashFlowEntries: true },
-      });
+  getBalancesSummary: protectedProcedure.query(async ({ ctx }) => {
+    const accounts = await db.bankAccount.findMany({
+      where: { accountId: ctx.accountId, isActive: true },
+      include: { cashFlowEntries: true },
+    });
 
-      // Also need to compute from sale/purchase payments for auto-derived
-      // For now, balance = initialBalance + manual entries
-      // (Full auto-derived balance requires assigning payments to bank accounts,
-      // which we don't have yet — deferred to future iteration)
-      const balances = accounts.map((acc) => {
-        let balance = acc.initialBalance;
-        for (const entry of acc.cashFlowEntries) {
-          if (entry.movementType === "ingreso" || entry.movementType === "apertura") {
-            balance += entry.amount;
-          } else if (entry.movementType === "egreso") {
-            balance -= entry.amount;
-          }
+    // Also need to compute from sale/purchase payments for auto-derived
+    // For now, balance = initialBalance + manual entries
+    // (Full auto-derived balance requires assigning payments to bank accounts,
+    // which we don't have yet — deferred to future iteration)
+    const balances = accounts.map((acc) => {
+      let balance = acc.initialBalance;
+      for (const entry of acc.cashFlowEntries) {
+        if (entry.movementType === "ingreso" || entry.movementType === "apertura") {
+          balance += entry.amount;
+        } else if (entry.movementType === "egreso") {
+          balance -= entry.amount;
         }
-
-        return {
-          id: acc.id,
-          name: acc.name,
-          initialBalance: acc.initialBalance,
-          currentBalance: r2(balance),
-          entryCount: acc.cashFlowEntries.length,
-        };
-      });
-
-      const totalBalance = balances.reduce((sum, b) => sum + b.currentBalance, 0);
+      }
 
       return {
-        accounts: balances,
-        totalBalance: r2(totalBalance),
+        id: acc.id,
+        name: acc.name,
+        initialBalance: acc.initialBalance,
+        currentBalance: r2(balance),
+        entryCount: acc.cashFlowEntries.length,
       };
-    }),
+    });
+
+    const totalBalance = balances.reduce((sum, b) => sum + b.currentBalance, 0);
+
+    return {
+      accounts: balances,
+      totalBalance: r2(totalBalance),
+    };
+  }),
 });

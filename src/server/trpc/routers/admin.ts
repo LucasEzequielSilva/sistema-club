@@ -1,12 +1,11 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../init";
+import { router, adminProcedure } from "../init";
 import { db } from "@/server/db";
 import { TRPCError } from "@trpc/server";
 import type { Prisma } from "@/generated/prisma/client";
 
-// NOTA: No hay auth en el router — la protección de `/admin` vive en middleware + admin layout.
-// Las páginas de admin hacen las calls; el middleware garantiza que solo admins llegan.
-// Si algún día exponemos tRPC público, hay que agregar check acá.
+// NOTA: Todos los procedures usan `adminProcedure` — requieren sesión válida + email en whitelist
+// (`isAdminEmail`). Esto se verifica en `init.ts`. Doble defensa: middleware/layout + check de tRPC.
 
 // ============================================
 // SMOKE TESTS — runner operativo para /admin/tests
@@ -268,7 +267,7 @@ export const adminRouter = router({
   // BUG REPORTS
   // ============================================
 
-  listBugs: publicProcedure
+  listBugs: adminProcedure
     .input(
       z.object({
         status: z.enum(["open", "investigating", "resolved", "wontfix", "all"]).optional().default("all"),
@@ -313,7 +312,7 @@ export const adminRouter = router({
       return bugs;
     }),
 
-  getBug: publicProcedure
+  getBug: adminProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
       const bug = await db.bugReport.findUnique({ where: { id: input.id } });
@@ -321,7 +320,7 @@ export const adminRouter = router({
       return bug;
     }),
 
-  updateBug: publicProcedure
+  updateBug: adminProcedure
     .input(
       z.object({
         id: z.string(),
@@ -338,7 +337,7 @@ export const adminRouter = router({
       return bug;
     }),
 
-  deleteBug: publicProcedure
+  deleteBug: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       await db.bugReport.delete({ where: { id: input.id } });
@@ -349,7 +348,7 @@ export const adminRouter = router({
   // HEALTH / STATS
   // ============================================
 
-  dbStats: publicProcedure.query(async () => {
+  dbStats: adminProcedure.query(async () => {
     const [
       accounts,
       users,
@@ -378,7 +377,7 @@ export const adminRouter = router({
     };
   }),
 
-  recentBugs: publicProcedure
+  recentBugs: adminProcedure
     .input(z.object({ limit: z.number().int().min(1).max(20).default(5) }).optional())
     .query(async ({ input }) => {
       return db.bugReport.findMany({
@@ -396,7 +395,7 @@ export const adminRouter = router({
       });
     }),
 
-  recentSales: publicProcedure
+  recentSales: adminProcedure
     .input(z.object({ limit: z.number().int().min(1).max(20).default(5) }).optional())
     .query(async ({ input }) => {
       return db.sale.findMany({
@@ -418,7 +417,7 @@ export const adminRouter = router({
   // DB INSPECTOR (mini Prisma Studio)
   // ============================================
 
-  dbListTables: publicProcedure.query(async () => {
+  dbListTables: adminProcedure.query(async () => {
     const results = await Promise.all(
       DB_TABLES.map(async (t) => {
         const model = (db as any)[t.model];
@@ -434,7 +433,7 @@ export const adminRouter = router({
     return results;
   }),
 
-  dbGetRows: publicProcedure
+  dbGetRows: adminProcedure
     .input(
       z.object({
         table: z.string(),
@@ -515,7 +514,7 @@ export const adminRouter = router({
       };
     }),
 
-  dbDeleteRow: publicProcedure
+  dbDeleteRow: adminProcedure
     .input(z.object({ table: z.string(), id: z.string() }))
     .mutation(async ({ input }) => {
       const tableDef = findTableDef(input.table);
@@ -558,7 +557,7 @@ export const adminRouter = router({
   // SMOKE TESTS
   // ============================================
 
-  testsList: publicProcedure.query(() => {
+  testsList: adminProcedure.query(() => {
     return SMOKE_TESTS.map((t) => ({
       key: t.key,
       name: t.name,
@@ -568,7 +567,7 @@ export const adminRouter = router({
     }));
   }),
 
-  testsRun: publicProcedure
+  testsRun: adminProcedure
     .input(z.object({ key: z.string() }))
     .mutation(async ({ input }): Promise<TestResult> => {
       const test = SMOKE_TESTS.find((t) => t.key === input.key);

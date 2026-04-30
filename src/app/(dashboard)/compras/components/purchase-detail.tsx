@@ -145,7 +145,7 @@ export function PurchaseDetail({
   useEffect(() => {
     if (!showPaymentDialog || !accountId) return;
     trpc.clasificaciones.listPaymentMethods
-      .query({ accountId })
+      .query()
       .then((methods: any[]) =>
         setPaymentMethods(
           methods

@@ -1,37 +1,34 @@
 import { z } from "zod";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import { TRPCError } from "@trpc/server";
 
 export const usersRouter = router({
-  list: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .query(async ({ input }) => {
-      return db.user.findMany({
-        where: { accountId: input.accountId },
-        orderBy: { createdAt: "asc" },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          isActive: true,
-          createdAt: true,
-        },
-      });
-    }),
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return db.user.findMany({
+      where: { accountId: ctx.accountId },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+  }),
 
-  create: publicProcedure
+  create: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         email: z.string().email(),
         password: z.string().min(4),
         name: z.string().optional(),
         role: z.enum(["admin", "viewer"]).default("admin"),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const existing = await db.user.findFirst({
         where: { email: input.email.trim().toLowerCase() },
       });
@@ -43,7 +40,7 @@ export const usersRouter = router({
       }
       return db.user.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           email: input.email.trim().toLowerCase(),
           password: input.password,
           name: input.name ?? null,
@@ -60,11 +57,10 @@ export const usersRouter = router({
       });
     }),
 
-  update: publicProcedure
+  update: protectedProcedure
     .input(
       z.object({
         id: z.string(),
-        accountId: z.string(),
         email: z.string().email().optional(),
         password: z.string().min(4).optional(),
         name: z.string().optional(),
@@ -72,9 +68,11 @@ export const usersRouter = router({
         isActive: z.boolean().optional(),
       })
     )
-    .mutation(async ({ input }) => {
-      const { id, accountId, ...data } = input;
-      const user = await db.user.findFirst({ where: { id, accountId } });
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...data } = input;
+      const user = await db.user.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Usuario no encontrado." });
       }
@@ -98,11 +96,11 @@ export const usersRouter = router({
       });
     }),
 
-  delete: publicProcedure
-    .input(z.object({ id: z.string(), accountId: z.string() }))
-    .mutation(async ({ input }) => {
+  delete: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
       const user = await db.user.findFirst({
-        where: { id: input.id, accountId: input.accountId },
+        where: { id: input.id, accountId: ctx.accountId },
       });
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Usuario no encontrado." });

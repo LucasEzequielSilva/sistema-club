@@ -232,17 +232,14 @@ export default function PosPage() {
       .catch(() => null);
 
     trpc.clasificaciones.bootstrapPaymentRouting
-      .mutate({ accountId })
+      .mutate()
       .catch(() => null)
       .then(() =>
         Promise.all([
-          trpc.productos.list.query({ accountId, isActive: true }),
-          trpc.productos.getPriceLists.query({ accountId }),
-          trpc.clasificaciones.listPaymentMethods.query({
-            accountId,
-          }),
+          trpc.productos.list.query({ isActive: true }),
+          trpc.productos.getPriceLists.query(),
+          trpc.clasificaciones.listPaymentMethods.query(),
           trpc.clasificaciones.listPaymentChannels.query({
-            accountId,
             isActive: true,
           }),
         ])
@@ -352,7 +349,6 @@ export default function PosPage() {
             .query({
               productId: item.product.id,
               priceListId: selectedPriceListId,
-              accountId,
             })
             .then((pricing) => ({ itemId: item.id, pricing }))
             .catch(() => ({ itemId: item.id, pricing: null }))
@@ -554,7 +550,6 @@ export default function PosPage() {
         const fetchedPricing = await trpc.ventas.getProductPrice.query({
           productId: product.id,
           priceListId: selectedPriceListId,
-          accountId,
         });
 
         if (!fetchedPricing.hasListPrice) {
@@ -777,7 +772,6 @@ export default function PosPage() {
         }
 
         const sale = await trpc.ventas.create.mutate({
-          accountId: accountId ?? "",
           productId: item.product.id,
           categoryId: item.pricing.categoryId,
           priceListId: selectedPriceListId || null,

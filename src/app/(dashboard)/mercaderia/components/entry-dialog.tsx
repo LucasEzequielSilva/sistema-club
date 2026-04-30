@@ -89,7 +89,7 @@ export function MerchandiseEntryDialog({
     setForm(EMPTY);
 
     trpc.productos.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((prods: any[]) =>
         setProducts(
           prods.map((p) => ({
@@ -141,7 +141,6 @@ export function MerchandiseEntryDialog({
     setLoading(true);
     try {
       await trpc.mercaderia.createEntry.mutate({
-        accountId,
         productId: form.productId,
         quantity,
         unitCost,

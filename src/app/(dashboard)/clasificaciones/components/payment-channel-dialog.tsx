@@ -61,8 +61,8 @@ export function PaymentChannelDialog({
   useEffect(() => {
     if (!open) return;
     Promise.all([
-      trpc.clasificaciones.listPaymentAccounts.query({ accountId }),
-      trpc.clasificaciones.listPaymentMethods.query({ accountId }),
+      trpc.clasificaciones.listPaymentAccounts.query(),
+      trpc.clasificaciones.listPaymentMethods.query(),
     ])
       .then(([accs, meths]) => {
         setAccounts(accs as any[]);
@@ -77,7 +77,7 @@ export function PaymentChannelDialog({
     if (editingId) {
       setFetching(true);
       trpc.clasificaciones.listPaymentChannels
-        .query({ accountId })
+        .query()
         .then((channels: any[]) => {
           const ch = channels.find((c) => c.id === editingId);
           if (!ch) return;
@@ -193,7 +193,6 @@ export function PaymentChannelDialog({
         toast.success("Canal actualizado");
       } else {
         await trpc.clasificaciones.createPaymentChannel.mutate({
-          accountId,
           name: name.trim(),
           paymentAccountId,
           paymentMethodId: resolvedMethodId,

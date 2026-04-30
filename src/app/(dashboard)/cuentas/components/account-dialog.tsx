@@ -56,7 +56,7 @@ export function AccountDialog({
     if (editingId) {
       setFetching(true);
       trpc.cuentas.listAccounts
-        .query({ accountId, includeInactive: true })
+        .query({ includeInactive: true })
         .then((accounts) => {
           const acc = accounts.find((a) => a.id === editingId);
           if (acc) {
@@ -98,7 +98,6 @@ export function AccountDialog({
         toast.success(`"${form.name}" actualizada`);
       } else {
         await trpc.cuentas.createAccount.mutate({
-          accountId,
           name: form.name,
           initialBalance: parseFloat(form.initialBalance) || 0,
           balanceDate: form.balanceDate ? new Date(form.balanceDate) : null,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 
 // ============================================================
@@ -20,16 +20,16 @@ export const cuadroResumenRouter = router({
   // GET MONTHLY SCORECARD (projected vs real)
   // Business Rule #13
   // ——————————————————————————————
-  getScorecard: publicProcedure
+  getScorecard: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         year: z.number(),
         month: z.number(), // 0-indexed
       })
     )
-    .query(async ({ input }) => {
-      const { accountId, year, month } = input;
+    .query(async ({ input, ctx }) => {
+      const { year, month } = input;
+      const accountId = ctx.accountId;
 
       const account = await db.account.findUnique({
         where: { id: accountId },

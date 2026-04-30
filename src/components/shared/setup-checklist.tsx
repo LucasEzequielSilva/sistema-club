@@ -83,10 +83,10 @@ export function SetupChecklist({ hasSales }: { hasSales: boolean }) {
       if (!accountId) return;
       try {
         const [cats, sups, prods, methods] = await Promise.all([
-          trpc.clasificaciones.listProductCategories.query({ accountId }),
-          trpc.proveedores.list.query({ accountId, isActive: true }),
-          trpc.productos.list.query({ accountId, isActive: true }),
-          trpc.clasificaciones.listPaymentMethods.query({ accountId }),
+          trpc.clasificaciones.listProductCategories.query(),
+          trpc.proveedores.list.query({ isActive: true }),
+          trpc.productos.list.query({ isActive: true }),
+          trpc.clasificaciones.listPaymentMethods.query(),
         ]);
         setStatus({
           hasCategories: (cats as any[]).length > 0,

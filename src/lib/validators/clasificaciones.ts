@@ -2,7 +2,6 @@ import { z } from "zod";
 
 // ProductCategory
 export const createProductCategorySchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -32,7 +31,6 @@ export const updateProductCategorySchema = z.object({
 
 // ProductSubcategory
 export const createProductSubcategorySchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   categoryId: z.string().cuid("Categoría inválida"),
   name: z
     .string()
@@ -64,7 +62,6 @@ export const updateProductSubcategorySchema = z.object({
 
 // CostCategory
 export const createCostCategorySchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -96,7 +93,6 @@ export const updateCostCategorySchema = z.object({
 
 // PaymentMethod
 export const createPaymentMethodSchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -124,7 +120,6 @@ export const updatePaymentMethodSchema = z.object({
 
 // PaymentAccount
 export const createPaymentAccountSchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
@@ -165,7 +160,6 @@ export const updatePaymentAccountSchema = z.object({
 
 // PaymentChannel
 export const createPaymentChannelSchema = z.object({
-  accountId: z.string().min(1, "Account ID requerido"),
   paymentAccountId: z.string().cuid("Cuenta receptora inválida"),
   paymentMethodId: z.string().cuid("Tipo de pago inválido"),
   name: z

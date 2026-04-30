@@ -80,7 +80,6 @@ export function EntryDialog({
 
     try {
       await trpc.cuentas.createEntry.mutate({
-        accountId,
         bankAccountId: form.bankAccountId,
         entryDate: new Date(form.entryDate),
         movementType: form.movementType,

@@ -59,15 +59,15 @@ export function PaymentMethodsTab({ accountId }: PaymentMethodsTabProps) {
   const loadAll = async () => {
     setLoading(true);
     try {
-      await trpc.clasificaciones.bootstrapPaymentRouting.mutate({ accountId });
+      await trpc.clasificaciones.bootstrapPaymentRouting.mutate();
     } catch {
       // no-op
     }
 
     try {
       const [a, c] = await Promise.all([
-        trpc.clasificaciones.listPaymentAccounts.query({ accountId }),
-        trpc.clasificaciones.listPaymentChannels.query({ accountId }),
+        trpc.clasificaciones.listPaymentAccounts.query(),
+        trpc.clasificaciones.listPaymentChannels.query(),
       ]);
       setAccounts(a as any[]);
       setChannels(c as any[]);

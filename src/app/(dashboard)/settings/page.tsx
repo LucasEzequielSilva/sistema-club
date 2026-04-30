@@ -46,10 +46,10 @@ export default function SettingsPage() {
   const [account, setAccount] = useState<AccountConfig | null>(null);
   const [accountSaving, setAccountSaving] = useState(false);
 
-  const load = useCallback(async (aid: string) => {
+  const load = useCallback(async (_aid: string) => {
     setLoading(true);
     try {
-      const result = await trpc.users.list.query({ accountId: aid });
+      const result = await trpc.users.list.query();
       setUsers(result as UserRow[]);
     } catch {
       toast.error("Error al cargar los usuarios.");
@@ -107,7 +107,7 @@ export default function SettingsPage() {
     if (!form.email || !form.password) return toast.error("Email y contraseña son obligatorios.");
     setSaving(true);
     try {
-      await trpc.users.create.mutate({ accountId, ...form });
+      await trpc.users.create.mutate(form);
       toast.success("Usuario creado.");
       setShowForm(false);
       setForm(EMPTY_FORM);
@@ -129,7 +129,7 @@ export default function SettingsPage() {
     if (!accountId) return;
     setEditSaving(true);
     try {
-      const payload: any = { id, accountId, name: editForm.name, role: editForm.role, isActive: editForm.isActive };
+      const payload: any = { id, name: editForm.name, role: editForm.role, isActive: editForm.isActive };
       if (editForm.password) payload.password = editForm.password;
       await trpc.users.update.mutate(payload);
       toast.success("Usuario actualizado.");
@@ -147,7 +147,7 @@ export default function SettingsPage() {
     if (!confirm(`¿Eliminar a ${u.name ?? u.email}?`)) return;
     setDeletingId(u.id);
     try {
-      await trpc.users.delete.mutate({ id: u.id, accountId });
+      await trpc.users.delete.mutate({ id: u.id });
       toast.success("Usuario eliminado.");
       load(accountId);
     } catch (e: any) {

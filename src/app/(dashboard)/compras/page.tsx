@@ -139,7 +139,6 @@ export default function ComprasPage() {
     setLoading(true);
     try {
       const params: any = {
-        accountId,
         ...(statusFilter !== "all" && { status: statusFilter }),
         ...(dateFrom && { dateFrom: new Date(dateFrom) }),
         ...(dateTo && {
@@ -150,7 +149,6 @@ export default function ComprasPage() {
       const [result, summaryResult] = await Promise.all([
         trpc.compras.list.query(params),
         trpc.compras.getSummary.query({
-          accountId,
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
           ...(dateTo && {
             dateTo: new Date(dateTo + "T23:59:59"),

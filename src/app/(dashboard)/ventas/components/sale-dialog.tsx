@@ -130,7 +130,7 @@ export function SaleDialog({
     if (!open) return;
 
     trpc.productos.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((prods: any[]) =>
         setProducts(
           prods.map((p) => ({
@@ -143,12 +143,12 @@ export function SaleDialog({
       .catch(() => {});
 
     trpc.productos.getPriceLists
-      .query({ accountId })
+      .query()
       .then((lists: any[]) => setPriceLists(lists))
       .catch(() => {});
 
     trpc.clasificaciones.listPaymentMethods
-      .query({ accountId })
+      .query()
       .then((methods: any[]) =>
         setPaymentMethods(
           methods
@@ -163,7 +163,7 @@ export function SaleDialog({
       .catch(() => {});
 
     trpc.clasificaciones.listPaymentChannels
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((channels: any[]) => {
         setPaymentChannels(channels.filter((c: any) => c.isActive));
       })
@@ -217,7 +217,6 @@ export function SaleDialog({
       .query({
         productId: form.productId,
         priceListId: form.priceListId,
-        accountId,
       })
       .then((pricing: any) => {
         setForm((prev) => ({
@@ -378,7 +377,6 @@ export function SaleDialog({
           }));
 
         await trpc.ventas.create.mutate({
-          accountId,
           productId: form.productId,
           categoryId: form.categoryId,
           priceListId: form.priceListId || null,

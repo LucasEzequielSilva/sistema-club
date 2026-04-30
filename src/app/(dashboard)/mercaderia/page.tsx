@@ -164,7 +164,7 @@ export default function MercaderiaPage() {
   useEffect(() => {
     if (!accountId) return;
     trpc.productos.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((prods: any[]) =>
         setProducts(prods.map((p) => ({ id: p.id, name: p.name })))
       )
@@ -177,7 +177,6 @@ export default function MercaderiaPage() {
     try {
       if (viewMode === "movements") {
         const result = await trpc.mercaderia.listMovements.query({
-          accountId,
           ...(typeFilter !== "all" && { movementType: typeFilter }),
           ...(productFilter !== "all" && { productId: productFilter }),
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
@@ -185,9 +184,7 @@ export default function MercaderiaPage() {
         });
         setMovements(result as StockMovementItem[]);
       } else {
-        const result = await trpc.mercaderia.getStockSummary.query({
-          accountId,
-        });
+        const result = await trpc.mercaderia.getStockSummary.query();
         setStockSummary(result.products);
         setStockTotals(result.totals);
       }

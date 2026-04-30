@@ -45,7 +45,7 @@ export function PaymentAccountDialog({
     if (editingId) {
       setFetching(true);
       trpc.clasificaciones.listPaymentAccounts
-        .query({ accountId })
+        .query()
         .then((accounts: any[]) => {
           const acc = accounts.find((a) => a.id === editingId);
           if (!acc) return;
@@ -81,7 +81,6 @@ export function PaymentAccountDialog({
         toast.success("Cuenta receptora actualizada");
       } else {
         await trpc.clasificaciones.createPaymentAccount.mutate({
-          accountId,
           name: name.trim(),
           provider: provider.trim() || null,
           identifier: identifier.trim() || null,

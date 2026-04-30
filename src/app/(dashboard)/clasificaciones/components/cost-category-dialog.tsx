@@ -77,7 +77,6 @@ export function CostCategoryDialog({
         toast.success("Clasificación actualizada");
       } else {
         await trpc.clasificaciones.createCostCategory.mutate({
-          accountId,
           name,
           costType: costType as "variable" | "fijo" | "impuestos",
           description: description || undefined,

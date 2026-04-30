@@ -104,7 +104,6 @@ export function SupplierDialog({
         toast.success(`"${form.name}" actualizado`);
       } else {
         await trpc.proveedores.create.mutate({
-          accountId,
           name: form.name,
           cuit: form.cuit,
           phone: form.phone,

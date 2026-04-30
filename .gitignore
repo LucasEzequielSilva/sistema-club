@@ -60,6 +60,7 @@ nul
 /public/branding/
 
 # Scratch scripts (exploration, one-shot seeding, recon)
+# NOTE: seed-testers.ts y migrate-passwords.ts SÍ se commitean (referencia operativa).
 /scripts/*.py
 /scripts/create-*.ts
 /scripts/reset-*.ts

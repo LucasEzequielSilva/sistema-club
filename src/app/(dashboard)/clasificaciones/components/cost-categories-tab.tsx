@@ -57,9 +57,7 @@ export function CostCategoriesTab({ accountId }: CostCategoriesTabProps) {
   const loadCategories = async () => {
     setLoading(true);
     try {
-      const result = await trpc.clasificaciones.listCostCategories.query({
-        accountId,
-      });
+      const result = await trpc.clasificaciones.listCostCategories.query();
       setCategories(result);
     } catch (error) {
       toast.error("Error al cargar las clasificaciones");

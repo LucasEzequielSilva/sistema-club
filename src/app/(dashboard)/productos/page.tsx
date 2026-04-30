@@ -134,11 +134,11 @@ export default function ProductosPage() {
   useEffect(() => {
     if (!accountId) return;
     trpc.clasificaciones.listProductCategories
-      .query({ accountId })
+      .query()
       .then((cats: any[]) => setCategories(cats.map((c) => ({ id: c.id, name: c.name }))))
       .catch(() => {});
     trpc.proveedores.list
-      .query({ accountId, isActive: true })
+      .query({ isActive: true })
       .then((sups) =>
         setSuppliers(sups.map((s) => ({ id: s.id, name: s.name })))
       )
@@ -150,7 +150,6 @@ export default function ProductosPage() {
     setLoading(true);
     try {
       const result = await trpc.productos.list.query({
-        accountId,
         search: search.trim() || undefined,
         categoryId: categoryFilter !== "all" ? categoryFilter : undefined,
         supplierId: supplierFilter !== "all" ? supplierFilter : undefined,

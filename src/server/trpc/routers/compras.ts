@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createPurchaseSchema,
@@ -156,38 +156,39 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // LIST (with filters, computed fields)
   // ——————————————————————————————
-  list: publicProcedure
+  list: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        search: z.string().optional(),
-        supplierId: z.string().optional(),
-        productId: z.string().optional(),
-        costCategoryId: z.string().optional(),
-        status: z.string().optional(),
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-      })
+      z
+        .object({
+          search: z.string().optional(),
+          supplierId: z.string().optional(),
+          productId: z.string().optional(),
+          costCategoryId: z.string().optional(),
+          status: z.string().optional(),
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const purchases = await db.purchase.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.supplierId && { supplierId: input.supplierId }),
-          ...(input.productId && { productId: input.productId }),
-          ...(input.costCategoryId && {
+          accountId: ctx.accountId,
+          ...(input?.supplierId && { supplierId: input.supplierId }),
+          ...(input?.productId && { productId: input.productId }),
+          ...(input?.costCategoryId && {
             costCategoryId: input.costCategoryId,
           }),
-          ...(input.status && { status: input.status }),
-          ...(input.dateFrom || input.dateTo
+          ...(input?.status && { status: input.status }),
+          ...(input?.dateFrom || input?.dateTo
             ? {
                 invoiceDate: {
-                  ...(input.dateFrom && { gte: input.dateFrom }),
-                  ...(input.dateTo && { lte: input.dateTo }),
+                  ...(input?.dateFrom && { gte: input.dateFrom }),
+                  ...(input?.dateTo && { lte: input.dateTo }),
                 },
               }
             : {}),
-          ...(input.search
+          ...(input?.search
             ? {
                 OR: [
                   {
@@ -243,27 +244,28 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // GET SUMMARY (totals for footer)
   // ——————————————————————————————
-  getSummary: publicProcedure
+  getSummary: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        dateFrom: z.coerce.date().optional(),
-        dateTo: z.coerce.date().optional(),
-      })
+      z
+        .object({
+          dateFrom: z.coerce.date().optional(),
+          dateTo: z.coerce.date().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const dateFilter =
-        input.dateFrom || input.dateTo
+        input?.dateFrom || input?.dateTo
           ? {
               invoiceDate: {
-                ...(input.dateFrom && { gte: input.dateFrom }),
-                ...(input.dateTo && { lte: input.dateTo }),
+                ...(input?.dateFrom && { gte: input.dateFrom }),
+                ...(input?.dateTo && { lte: input.dateTo }),
               },
             }
           : {};
 
       const purchases = await db.purchase.findMany({
-        where: { accountId: input.accountId, ...dateFilter },
+        where: { accountId: ctx.accountId, ...dateFilter },
         include: {
           payments: true,
           costCategory: { select: { costType: true } },
@@ -315,11 +317,11 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // GET BY ID (full detail)
   // ——————————————————————————————
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const purchase = await db.purchase.findUnique({
-        where: { id: input.id },
+    .query(async ({ input, ctx }) => {
+      const purchase = await db.purchase.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: {
           account: {
             select: { taxStatus: true, ivaRate: true },
@@ -374,14 +376,14 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // CREATE (with stock movement + inline payments)
   // ——————————————————————————————
-  create: publicProcedure
+  create: protectedProcedure
     .input(createPurchaseSchema)
-    .mutation(async ({ input }) => {
-      // Validate product exists if provided
+    .mutation(async ({ input, ctx }) => {
+      // Validate product exists if provided (and belongs to this account)
       let product = null;
       if (input.productId) {
-        product = await db.product.findUnique({
-          where: { id: input.productId },
+        product = await db.product.findFirst({
+          where: { id: input.productId, accountId: ctx.accountId },
         });
         if (!product) {
           throw new TRPCError({
@@ -391,10 +393,10 @@ export const comprasRouter = router({
         }
       }
 
-      // Validate supplier exists if provided
+      // Validate supplier exists if provided (and belongs to this account)
       if (input.supplierId) {
-        const supplier = await db.supplier.findUnique({
-          where: { id: input.supplierId },
+        const supplier = await db.supplier.findFirst({
+          where: { id: input.supplierId, accountId: ctx.accountId },
         });
         if (!supplier) {
           throw new TRPCError({
@@ -404,9 +406,9 @@ export const comprasRouter = router({
         }
       }
 
-      // Validate cost category
-      const costCategory = await db.costCategory.findUnique({
-        where: { id: input.costCategoryId },
+      // Validate cost category (and belongs to this account)
+      const costCategory = await db.costCategory.findFirst({
+        where: { id: input.costCategoryId, accountId: ctx.accountId },
       });
       if (!costCategory) {
         throw new TRPCError({
@@ -433,7 +435,7 @@ export const comprasRouter = router({
       // Create purchase
       const purchase = await db.purchase.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           supplierId: input.supplierId || null,
           productId: input.productId || null,
           costCategoryId: input.costCategoryId,
@@ -454,7 +456,7 @@ export const comprasRouter = router({
       if (input.payments.length > 0) {
         for (const payment of input.payments) {
           const routing = await resolvePaymentRouting({
-            accountId: input.accountId,
+            accountId: ctx.accountId,
             paymentMethodId: payment.paymentMethodId,
             paymentChannelId: payment.paymentChannelId,
             paymentAccountId: payment.paymentAccountId,
@@ -479,7 +481,7 @@ export const comprasRouter = router({
       if (input.productId) {
         await db.stockMovement.create({
           data: {
-            accountId: input.accountId,
+            accountId: ctx.accountId,
             productId: input.productId,
             movementType: "purchase",
             quantity: input.quantity, // positive for purchase
@@ -504,13 +506,13 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // UPDATE (no stock recalc — only metadata fields)
   // ——————————————————————————————
-  update: publicProcedure
+  update: protectedProcedure
     .input(updatePurchaseSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, ...fields } = input;
 
-      const current = await db.purchase.findUnique({
-        where: { id },
+      const current = await db.purchase.findFirst({
+        where: { id, accountId: ctx.accountId },
         include: { payments: true },
       });
       if (!current) {
@@ -583,11 +585,11 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // DELETE (reverse stock movement)
   // ——————————————————————————————
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const purchase = await db.purchase.findUnique({
-        where: { id: input.id },
+    .mutation(async ({ input, ctx }) => {
+      const purchase = await db.purchase.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
       });
       if (!purchase) {
         throw new TRPCError({
@@ -615,11 +617,11 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // ADD PAYMENT (post-creation partial payment)
   // ——————————————————————————————
-  addPayment: publicProcedure
+  addPayment: protectedProcedure
     .input(addPurchasePaymentSchema)
-    .mutation(async ({ input }) => {
-      const purchase = await db.purchase.findUnique({
-        where: { id: input.purchaseId },
+    .mutation(async ({ input, ctx }) => {
+      const purchase = await db.purchase.findFirst({
+        where: { id: input.purchaseId, accountId: ctx.accountId },
         include: { payments: true },
       });
       if (!purchase) {
@@ -678,11 +680,11 @@ export const comprasRouter = router({
   // ——————————————————————————————
   // REMOVE PAYMENT
   // ——————————————————————————————
-  removePayment: publicProcedure
+  removePayment: protectedProcedure
     .input(z.object({ paymentId: z.string() }))
-    .mutation(async ({ input }) => {
-      const payment = await db.purchasePayment.findUnique({
-        where: { id: input.paymentId },
+    .mutation(async ({ input, ctx }) => {
+      const payment = await db.purchasePayment.findFirst({
+        where: { id: input.paymentId, purchase: { accountId: ctx.accountId } },
         include: {
           purchase: {
             include: { payments: true },

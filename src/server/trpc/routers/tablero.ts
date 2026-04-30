@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 
 // ============================================================
@@ -36,16 +36,16 @@ export const tableroRouter = router({
   // ——————————————————————————————
   // GET DASHBOARD DATA (single query for everything)
   // ——————————————————————————————
-  getDashboard: publicProcedure
+  getDashboard: protectedProcedure
     .input(
       z.object({
-        accountId: z.string(),
         dateFrom: z.coerce.date(),
         dateTo: z.coerce.date(),
       })
     )
-    .query(async ({ input }) => {
-      const { accountId, dateFrom, dateTo } = input;
+    .query(async ({ input, ctx }) => {
+      const { dateFrom, dateTo } = input;
+      const accountId = ctx.accountId;
 
       const account = await db.account.findUnique({
         where: { id: accountId },

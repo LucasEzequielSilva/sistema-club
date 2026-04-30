@@ -401,7 +401,6 @@ function StepCategories({ rubro, onNext }: { rubro: RubroId; onNext: (id: string
       for (const name of selected) {
         try {
           const result = await trpc.clasificaciones.createProductCategory.mutate({
-            accountId: accountId ?? "",
             name,
           });
           if (!firstId) firstId = (result as any).id;
@@ -411,9 +410,7 @@ function StepCategories({ rubro, onNext }: { rubro: RubroId; onNext: (id: string
       }
       // Si todas fallaron (todas duplicadas), buscar la primera existente
       if (!firstId) {
-        const existing = await trpc.clasificaciones.listProductCategories.query({
-          accountId: accountId ?? "",
-        });
+        const existing = await trpc.clasificaciones.listProductCategories.query();
         firstId = (existing as any[])[0]?.id ?? null;
       }
       onNext(firstId ?? "");
@@ -520,7 +517,6 @@ function StepSupplier({ onNext }: { onNext: () => void }) {
     setLoading(true);
     try {
       await trpc.proveedores.create.mutate({
-        accountId: accountId ?? "",
         name: name.trim(),
         phone: phone.trim() || "",
       });
@@ -614,7 +610,6 @@ function StepProduct({
     setLoading(true);
     try {
       const product = await trpc.productos.create.mutate({
-        accountId: accountId ?? "",
         name: name.trim(),
         categoryId,
         unit: "unidad",
@@ -719,7 +714,7 @@ function StepPayments({ onNext }: { onNext: () => void }) {
       const acId = accountId ?? "";
 
       // 1. Métodos de pago seleccionados
-      const existing = await trpc.clasificaciones.listPaymentMethods.query({ accountId: acId });
+      const existing = await trpc.clasificaciones.listPaymentMethods.query();
       const existingNames = (existing as any[]).map((m) => (m.name as string).toLowerCase());
       const toCreate = PAYMENT_OPTIONS.filter(
         (o) => selected.includes(o.name) && !existingNames.includes(o.name.toLowerCase())
@@ -728,7 +723,6 @@ function StepPayments({ onNext }: { onNext: () => void }) {
         await Promise.all(
           toCreate.map((o) =>
             trpc.clasificaciones.createPaymentMethod.mutate({
-              accountId: acId,
               name: o.name,
               accreditationDays: o.days,
             })
@@ -749,7 +743,7 @@ function StepPayments({ onNext }: { onNext: () => void }) {
       ];
       for (const cat of DEFAULT_COST_CATS) {
         try {
-          await trpc.clasificaciones.createCostCategory.mutate({ accountId: acId, ...cat });
+          await trpc.clasificaciones.createCostCategory.mutate(cat);
         } catch { /* ya existe, ignorar */ }
       }
 

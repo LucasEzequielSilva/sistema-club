@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure } from "../init";
+import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import {
   createProductSchema,
@@ -66,7 +66,7 @@ function calcPricing(
 function normalizeSearchText(value: string): string {
   return value
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .trim();
 }
@@ -105,20 +105,21 @@ export const productosRouter = router({
   // ——————————————————————————————
   // LIST (with search, filters, computed fields)
   // ——————————————————————————————
-  list: publicProcedure
+  list: protectedProcedure
     .input(
-      z.object({
-        accountId: z.string(),
-        search: z.string().optional(),
-        categoryId: z.string().optional(),
-        supplierId: z.string().optional(),
-        isActive: z.boolean().optional(),
-        lowStockOnly: z.boolean().optional(),
-      })
+      z
+        .object({
+          search: z.string().optional(),
+          categoryId: z.string().optional(),
+          supplierId: z.string().optional(),
+          isActive: z.boolean().optional(),
+          lowStockOnly: z.boolean().optional(),
+        })
+        .optional()
     )
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const account = await db.account.findUnique({
-        where: { id: input.accountId },
+        where: { id: ctx.accountId },
       });
       if (!account) {
         throw new TRPCError({
@@ -129,11 +130,11 @@ export const productosRouter = router({
 
       const products = await db.product.findMany({
         where: {
-          accountId: input.accountId,
-          ...(input.isActive !== undefined && { isActive: input.isActive }),
-          ...(input.search && { name: { contains: input.search, mode: "insensitive" } }),
-          ...(input.categoryId && { categoryId: input.categoryId }),
-          ...(input.supplierId && { supplierId: input.supplierId }),
+          accountId: ctx.accountId,
+          ...(input?.isActive !== undefined && { isActive: input.isActive }),
+          ...(input?.search && { name: { contains: input.search, mode: "insensitive" } }),
+          ...(input?.categoryId && { categoryId: input.categoryId }),
+          ...(input?.supplierId && { supplierId: input.supplierId }),
         },
         orderBy: { name: "asc" },
         include: {
@@ -186,10 +187,10 @@ export const productosRouter = router({
         };
       });
 
-      const searchValue = input.search ?? "";
+      const searchValue = input?.search ?? "";
 
       // Apply low stock filter after computation
-      if (input.lowStockOnly) {
+      if (input?.lowStockOnly) {
         return enriched
           .filter((p) => p.isLowStock)
           .filter((p) => !searchValue || matchesProductSearch(p, searchValue));
@@ -205,11 +206,11 @@ export const productosRouter = router({
   // ——————————————————————————————
   // GET BY ID (full detail with pricing for all lists + stock)
   // ——————————————————————————————
-  getById: publicProcedure
+  getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const product = await db.product.findUnique({
-        where: { id: input.id },
+    .query(async ({ input, ctx }) => {
+      const product = await db.product.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
         include: {
           account: {
             select: {
@@ -288,24 +289,22 @@ export const productosRouter = router({
   // ——————————————————————————————
   // GET PRICE LISTS (for the account, to populate dropdowns)
   // ——————————————————————————————
-  getPriceLists: publicProcedure
-    .input(z.object({ accountId: z.string() }))
-    .query(async ({ input }) => {
-      return db.priceList.findMany({
-        where: { accountId: input.accountId, isActive: true },
-        orderBy: { sortOrder: "asc" },
-      });
-    }),
+  getPriceLists: protectedProcedure.query(async ({ ctx }) => {
+    return db.priceList.findMany({
+      where: { accountId: ctx.accountId, isActive: true },
+      orderBy: { sortOrder: "asc" },
+    });
+  }),
 
   // ——————————————————————————————
   // CREATE
   // ——————————————————————————————
-  create: publicProcedure
+  create: protectedProcedure
     .input(createProductSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Check for duplicate name
       const existing = await db.product.findFirst({
-        where: { accountId: input.accountId, name: input.name },
+        where: { accountId: ctx.accountId, name: input.name },
       });
       if (existing) {
         throw new TRPCError({
@@ -319,7 +318,7 @@ export const productosRouter = router({
         const subcat = await db.productSubcategory.findFirst({
           where: {
             id: input.subcategoryId,
-            accountId: input.accountId,
+            accountId: ctx.accountId,
             categoryId: input.categoryId,
           },
         });
@@ -334,7 +333,7 @@ export const productosRouter = router({
       // Create product
       const product = await db.product.create({
         data: {
-          accountId: input.accountId,
+          accountId: ctx.accountId,
           categoryId: input.categoryId,
           subcategoryId: input.subcategoryId || null,
           supplierId: input.supplierId || null,
@@ -355,7 +354,7 @@ export const productosRouter = router({
 
       // Auto-create PriceListItems for all active price lists (with 0% markup)
       const priceLists = await db.priceList.findMany({
-        where: { accountId: input.accountId, isActive: true },
+        where: { accountId: ctx.accountId, isActive: true },
       });
 
       if (priceLists.length > 0) {
@@ -373,7 +372,7 @@ export const productosRouter = router({
         const unitCost = calcUnitCost(input);
         await db.stockMovement.create({
           data: {
-            accountId: input.accountId,
+            accountId: ctx.accountId,
             productId: product.id,
             movementType: "initial",
             quantity: input.initialStock,
@@ -391,12 +390,14 @@ export const productosRouter = router({
   // ——————————————————————————————
   // UPDATE
   // ——————————————————————————————
-  update: publicProcedure
+  update: protectedProcedure
     .input(updateProductSchema)
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, effectiveDate, ...fields } = input;
 
-      const current = await db.product.findUnique({ where: { id } });
+      const current = await db.product.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
       if (!current) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -518,11 +519,11 @@ export const productosRouter = router({
   // ——————————————————————————————
   // UPDATE PRICING (bulk update markups for a product across all lists)
   // ——————————————————————————————
-  updatePricing: publicProcedure
+  updatePricing: protectedProcedure
     .input(bulkUpdatePriceListItemsSchema)
-    .mutation(async ({ input }) => {
-      const product = await db.product.findUnique({
-        where: { id: input.productId },
+    .mutation(async ({ input, ctx }) => {
+      const product = await db.product.findFirst({
+        where: { id: input.productId, accountId: ctx.accountId },
       });
       if (!product) {
         throw new TRPCError({
@@ -559,11 +560,11 @@ export const productosRouter = router({
   // ——————————————————————————————
   // SOFT DELETE (isActive = false)
   // ——————————————————————————————
-  softDelete: publicProcedure
+  softDelete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      const product = await db.product.findUnique({
-        where: { id: input.id },
+    .mutation(async ({ input, ctx }) => {
+      const product = await db.product.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
       });
 
       if (!product) {
@@ -582,9 +583,19 @@ export const productosRouter = router({
   // ——————————————————————————————
   // HARD DELETE (only if no sales/purchases)
   // ——————————————————————————————
-  delete: publicProcedure
+  delete: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      const product = await db.product.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!product) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Producto no encontrado",
+        });
+      }
+
       const [salesCount, purchasesCount] = await Promise.all([
         db.sale.count({ where: { productId: input.id } }),
         db.purchase.count({ where: { productId: input.id } }),
