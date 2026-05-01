@@ -10,11 +10,11 @@ const SITE_URL =
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Acelerator — by Matías Randazzo",
+    default: "Acelerator — Gestión financiera para pymes by Matías Randazzo",
     template: "%s · Acelerator",
   },
   description:
-    "Método Acelerador de Ganancias — gestión financiera para pymes argentinas. Ventas, costos y rentabilidad en una sola pantalla.",
+    "El Método Acelerador de Ganancias de Matías Randazzo, ahora en una app. Controlá ventas, costos, stock y rentabilidad de tu pyme argentina en una sola pantalla.",
   applicationName: "Acelerator",
   authors: [{ name: "Matías Randazzo" }],
   creator: "Matías Randazzo",
@@ -34,16 +34,16 @@ export const metadata: Metadata = {
     locale: "es_AR",
     url: SITE_URL,
     siteName: "Acelerator",
-    title: "Acelerator — by Matías Randazzo",
+    title: "Acelerator — Gestión financiera para pymes by Matías Randazzo",
     description:
-      "Gestión financiera para pymes argentinas. Ventas, costos y rentabilidad en una sola pantalla.",
+      "El Método Acelerador de Ganancias de Matías Randazzo, ahora en una app. Controlá ventas, costos, stock y rentabilidad de tu pyme argentina en una sola pantalla.",
     // images se resuelven automáticamente via app/opengraph-image.tsx
   },
   twitter: {
     card: "summary_large_image",
-    title: "Acelerator — by Matías Randazzo",
+    title: "Acelerator — Gestión financiera para pymes by Matías Randazzo",
     description:
-      "Gestión financiera para pymes argentinas. Ventas, costos y rentabilidad en una sola pantalla.",
+      "El Método Acelerador de Ganancias de Matías Randazzo, ahora en una app. Controlá ventas, costos, stock y rentabilidad de tu pyme argentina en una sola pantalla.",
     creator: "@matiasrandazzook",
     // images se resuelven automáticamente via app/twitter-image.tsx
   },
