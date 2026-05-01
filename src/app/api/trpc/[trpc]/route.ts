@@ -2,6 +2,9 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 
 import { appRouter } from "@/server/trpc/router";
 import { createTRPCContext } from "@/server/trpc/init";
+import { makeLogger } from "@/lib/logger";
+
+const logger = makeLogger("trpc");
 
 /**
  * Configure basic CORS headers
@@ -28,15 +31,16 @@ const handler = (req: Request) =>
     req,
     router: appRouter,
     createContext: () => createTRPCContext({ req }),
-    onError:
-      process.env.NODE_ENV === "development"
-        ? ({ path, error }) => {
-            console.error(
-              `❌ tRPC failed on ${path ?? "<no-path>"}:`,
-              error
-            );
-          }
-        : undefined,
+    onError: ({ path, error, type }) => {
+      // En prod nos interesan errores de servidor, no UNAUTHORIZED/FORBIDDEN/BAD_REQUEST normales.
+      const skip = ["UNAUTHORIZED", "FORBIDDEN", "BAD_REQUEST", "NOT_FOUND"];
+      if (skip.includes(error.code)) return;
+      logger.error("tRPC procedure failed", error, {
+        path: path ?? "<no-path>",
+        type,
+        code: error.code,
+      });
+    },
   }).then(setCorsHeaders);
 
 export const GET = handler;

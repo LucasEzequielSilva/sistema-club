@@ -30,6 +30,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAccountId } from "@/hooks/use-account-id";
+import { isDeposit } from "@/lib/sale-flags";
+import { useConfirm } from "@/hooks/use-confirm";
 
 interface SaleDetailProps {
   saleId: string;
@@ -133,6 +135,38 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
       .finally(() => setLoading(false));
   };
 
+  const [confirmConvert, ConfirmConvertDialog] = useConfirm({
+    title: "Convertir seña a venta completa",
+    description:
+      "Esta venta deja de figurar como seña. Si todavía falta cobrar, mantiene su estado parcial.",
+    confirmLabel: "Convertir",
+  });
+
+  const handleConvertDeposit = async () => {
+    if (!sale) return;
+    if (!(await confirmConvert())) return;
+    try {
+      await trpc.ventas.convertDepositToSale.mutate({ id: sale.id });
+      toast.success("Convertida a venta");
+      loadSale();
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "No se pudo convertir");
+    }
+  };
+
+  const handleMarkAsDeposit = async () => {
+    if (!sale) return;
+    try {
+      await trpc.ventas.markAsDeposit.mutate({ id: sale.id });
+      toast.success("Marcada como seña");
+      loadSale();
+      onRefresh();
+    } catch (err: any) {
+      toast.error(err.message || "No se pudo marcar");
+    }
+  };
+
   useEffect(() => {
     loadSale();
   }, [saleId]);
@@ -217,9 +251,11 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
 
   const cfg = STATUS_CONFIG[sale.status] || STATUS_CONFIG.pending;
   const isRI = sale.account.taxStatus === "responsable_inscripto";
+  const isSenia = isDeposit(sale.notes);
 
   return (
     <div className="space-y-6">
+      {ConfirmConvertDialog}
       {/* Header */}
       <div className="flex justify-between items-start">
         <div>
@@ -238,6 +274,11 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
             >
               {cfg.label}
             </span>
+            {isSenia && (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-300">
+                Seña
+              </Badge>
+            )}
           </h1>
           <div className="flex gap-4 text-sm text-gray-500 mt-1">
             <span>{formatDate(sale.saleDate)}</span>
@@ -251,8 +292,33 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
             )}
           </div>
         </div>
-        <Button onClick={() => onEdit(sale.id)}>Editar</Button>
+        <div className="flex gap-2">
+          {!isSenia && (
+            <Button variant="outline" onClick={handleMarkAsDeposit}>
+              Marcar como seña
+            </Button>
+          )}
+          <Button onClick={() => onEdit(sale.id)}>Editar</Button>
+        </div>
       </div>
+
+      {/* Banner cuando es seña */}
+      {isSenia && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-amber-700">
+              Esta venta es una seña
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              El cliente entregó un anticipo. Convertila a venta completa
+              cuando termine de pagar.
+            </p>
+          </div>
+          <Button onClick={handleConvertDeposit} className="shrink-0">
+            Convertir a venta completa
+          </Button>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-4 gap-4">

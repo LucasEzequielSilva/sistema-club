@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { noScripts } from "@/lib/sanitize";
 
 // ============================================================
 // Product
@@ -12,15 +13,18 @@ export const createProductSchema = z.object({
   name: z
     .string()
     .min(1, "El nombre es obligatorio")
-    .max(200, "Máximo 200 caracteres"),
+    .max(200, "Máximo 200 caracteres")
+    .refine(noScripts, "El nombre contiene caracteres no permitidos"),
   barcode: z
     .string()
     .max(50, "Máximo 50 caracteres")
+    .refine(noScripts, "El código de barras contiene caracteres no permitidos")
     .optional()
     .or(z.literal("")),
   sku: z
     .string()
     .max(50, "Máximo 50 caracteres")
+    .refine(noScripts, "El SKU contiene caracteres no permitidos")
     .optional()
     .or(z.literal("")),
   unit: z.enum(["unidad", "kg", "litro", "metro", "par"]).default("unidad"),
@@ -47,9 +51,20 @@ export const updateProductSchema = z.object({
     .string()
     .min(1, "El nombre es obligatorio")
     .max(200, "Máximo 200 caracteres")
+    .refine(noScripts, "El nombre contiene caracteres no permitidos")
     .optional(),
-  barcode: z.string().max(50).optional().nullable(),
-  sku: z.string().max(50).optional().nullable(),
+  barcode: z
+    .string()
+    .max(50)
+    .refine(noScripts, "El código de barras contiene caracteres no permitidos")
+    .optional()
+    .nullable(),
+  sku: z
+    .string()
+    .max(50)
+    .refine(noScripts, "El SKU contiene caracteres no permitidos")
+    .optional()
+    .nullable(),
   unit: z.enum(["unidad", "kg", "litro", "metro", "par"]).optional(),
   origin: z.enum(["fabricado", "comprado"]).optional(),
 

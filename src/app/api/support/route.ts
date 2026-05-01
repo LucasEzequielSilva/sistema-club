@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
+import { supportLimiter, clientId, rateLimitedResponse } from "@/lib/rate-limit";
+import { makeLogger } from "@/lib/logger";
+import { stripHtml } from "@/lib/sanitize";
+
+const logger = makeLogger("support");
 
 type SupportType = "bug" | "suggestion" | "question";
 
@@ -94,15 +99,23 @@ async function notifyDiscord(payload: {
       body: JSON.stringify(body),
     });
   } catch (err) {
-    // No fallar el request principal — solo loggear
-    console.error("[support] discord webhook failed:", err);
+    // No fallar el request principal — solo loggear (warn, no error: no rompe la respuesta).
+    logger.warn("Discord webhook failed", {
+      error: err instanceof Error ? err.message : String(err),
+      reportId: payload.id,
+    });
   }
 }
 
 export async function POST(req: NextRequest) {
+  const { success, reset } = await supportLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   try {
     const body = (await req.json()) as SupportBody;
-    const title = typeof body.title === "string" ? body.title.trim() : "";
+    const rawTitle = typeof body.title === "string" ? body.title.trim() : "";
+    // Sanitizar: el título se inyecta en Discord embeds y se devuelve por API.
+    const title = stripHtml(rawTitle).slice(0, 200);
     if (!title) {
       return NextResponse.json(
         { error: "Falta el título del reporte" },
@@ -124,21 +137,32 @@ export async function POST(req: NextRequest) {
       req.headers.get("referer") ?? req.nextUrl?.origin ?? null;
     const userAgent = req.headers.get("user-agent") ?? null;
 
-    const description =
+    const rawDescription =
       typeof body.description === "string" && body.description.trim().length > 0
         ? body.description.trim()
         : null;
+    // Sanitizar descripción — también se reenvía a Discord.
+    const description = rawDescription
+      ? stripHtml(rawDescription).slice(0, 5000)
+      : null;
 
     const screenshot =
       typeof body.screenshot === "string" && body.screenshot.length > 0
         ? body.screenshot
         : null;
 
+    // Sanitizar valores de metadata (solo strings shallow). El screenshot
+    // intencionalmente NO está acá: se procesa por separado.
+    const rawMetadata =
+      body.metadata && typeof body.metadata === "object" ? body.metadata : {};
+    const cleanMetadata: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(rawMetadata)) {
+      cleanMetadata[key] =
+        typeof value === "string" ? stripHtml(value).slice(0, 1000) : value;
+    }
     const metadata = {
       type,
-      ...(body.metadata && typeof body.metadata === "object"
-        ? body.metadata
-        : {}),
+      ...cleanMetadata,
     };
 
     const report = await db.bugReport.create({
@@ -174,6 +198,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "No se pudo guardar el reporte";
+    logger.error("Falló POST /api/support", err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

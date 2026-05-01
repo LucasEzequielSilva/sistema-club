@@ -7,6 +7,12 @@ import {
   updateProductSchema,
   bulkUpdatePriceListItemsSchema,
 } from "@/lib/validators/productos";
+import {
+  type RoundingMode,
+  deriveMarkup,
+  normalizeRoundingMode,
+  roundPrice,
+} from "@/lib/rounding";
 
 // ============================================================
 // Helpers — pricing calculations (all in backend per architecture decision)
@@ -29,37 +35,71 @@ function calcUnitCost(product: {
 function calcPricing(
   unitCost: number,
   markupPct: number,
-  account: { taxStatus: string; ivaRate: number; includeIvaInCost: boolean }
+  account: { taxStatus: string; ivaRate: number; includeIvaInCost: boolean },
+  roundingMode: RoundingMode = "none"
 ) {
+  const isRI = account.taxStatus === "responsable_inscripto";
+
   // If RI and cost includes IVA, extract IVA from cost for margin calculations
   let costForMargin = unitCost;
-  if (
-    account.taxStatus === "responsable_inscripto" &&
-    account.includeIvaInCost
-  ) {
+  if (isRI && account.includeIvaInCost) {
     costForMargin = unitCost / (1 + account.ivaRate / 100);
   }
 
-  const salePrice = unitCost * (1 + markupPct / 100);
+  const rawSalePrice = unitCost * (1 + markupPct / 100);
+  const rawSalePriceWithIva = isRI
+    ? rawSalePrice * (1 + account.ivaRate / 100)
+    : null;
 
-  const salePriceWithIva =
-    account.taxStatus === "responsable_inscripto"
-      ? salePrice * (1 + account.ivaRate / 100)
-      : null;
+  // Apply rounding (if any) to the price the end customer sees
+  let effectiveSalePrice = rawSalePrice;
+  let effectiveSalePriceWithIva = rawSalePriceWithIva;
+  let markupPctEffective = markupPct;
+  let rounded = false;
 
-  const contributionMargin = salePrice - costForMargin;
-  const marginPct = salePrice > 0 ? (contributionMargin / salePrice) * 100 : 0;
+  if (roundingMode !== "none" && unitCost > 0) {
+    const targetGross = isRI ? rawSalePriceWithIva ?? 0 : rawSalePrice;
+    if (targetGross > 0) {
+      const roundedGross = roundPrice(targetGross, roundingMode);
+      if (roundedGross !== targetGross) {
+        rounded = true;
+        if (isRI) {
+          effectiveSalePriceWithIva = roundedGross;
+          effectiveSalePrice = roundedGross / (1 + account.ivaRate / 100);
+        } else {
+          effectiveSalePrice = roundedGross;
+        }
+        markupPctEffective = deriveMarkup(unitCost, effectiveSalePrice);
+      }
+    }
+  }
+
+  const contributionMargin = effectiveSalePrice - costForMargin;
+  const marginPct =
+    effectiveSalePrice > 0 ? (contributionMargin / effectiveSalePrice) * 100 : 0;
 
   return {
     unitCost,
     costForMargin,
-    salePrice: Math.round(salePrice * 100) / 100,
+    salePrice: Math.round(effectiveSalePrice * 100) / 100,
     salePriceWithIva:
-      salePriceWithIva !== null
-        ? Math.round(salePriceWithIva * 100) / 100
+      effectiveSalePriceWithIva !== null
+        ? Math.round(effectiveSalePriceWithIva * 100) / 100
         : null,
     contributionMargin: Math.round(contributionMargin * 100) / 100,
     marginPct: Math.round(marginPct * 100) / 100,
+    // Original markup the user set in DB (untouched)
+    markupPctOriginal: Math.round(markupPct * 100) / 100,
+    // Markup that effectively applies after rounding (== original if no rounding)
+    markupPctEffective: Math.round(markupPctEffective * 100) / 100,
+    // Raw (un-rounded) values, for displaying "Redondeado de $X" tooltip
+    rawSalePrice: Math.round(rawSalePrice * 100) / 100,
+    rawSalePriceWithIva:
+      rawSalePriceWithIva !== null
+        ? Math.round(rawSalePriceWithIva * 100) / 100
+        : null,
+    roundingMode,
+    rounded,
   };
 }
 
@@ -143,7 +183,14 @@ export const productosRouter = router({
           supplier: { select: { id: true, name: true } },
           priceListItems: {
             include: {
-              priceList: { select: { id: true, name: true, isDefault: true } },
+              priceList: {
+                select: {
+                  id: true,
+                  name: true,
+                  isDefault: true,
+                  roundingMode: true,
+                },
+              },
             },
           },
           _count: {
@@ -175,7 +222,12 @@ export const productosRouter = router({
           (item) => item.priceList.isDefault
         );
         const defaultPricing = defaultPriceItem
-          ? calcPricing(unitCost, defaultPriceItem.markupPct, account)
+          ? calcPricing(
+              unitCost,
+              defaultPriceItem.markupPct,
+              account,
+              normalizeRoundingMode(defaultPriceItem.priceList.roundingMode)
+            )
           : null;
 
         return {
@@ -231,6 +283,7 @@ export const productosRouter = router({
                   name: true,
                   isDefault: true,
                   sortOrder: true,
+                  roundingMode: true,
                 },
               },
             },
@@ -265,13 +318,16 @@ export const productosRouter = router({
       const isLowStock = currentStock <= product.minStock;
 
       // Calculate pricing for each price list
-      const pricingByList = product.priceListItems.map((item) => ({
-        priceListId: item.priceList.id,
-        priceListName: item.priceList.name,
-        isDefault: item.priceList.isDefault,
-        markupPct: item.markupPct,
-        ...calcPricing(unitCost, item.markupPct, product.account),
-      }));
+      const pricingByList = product.priceListItems.map((item) => {
+        const roundingMode = normalizeRoundingMode(item.priceList.roundingMode);
+        return {
+          priceListId: item.priceList.id,
+          priceListName: item.priceList.name,
+          isDefault: item.priceList.isDefault,
+          markupPct: item.markupPct,
+          ...calcPricing(unitCost, item.markupPct, product.account, roundingMode),
+        };
+      });
 
       // Valued stock = currentStock * current unitCost
       const valuedStock = Math.round(currentStock * unitCost * 100) / 100;

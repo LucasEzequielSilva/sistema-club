@@ -36,6 +36,7 @@ import { StatCard } from "@/components/shared/stat-card";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useAccountId } from "@/hooks/use-account-id";
+import { isDeposit } from "@/lib/sale-flags";
 
 type SaleListItem = {
   id: string;
@@ -188,6 +189,7 @@ export default function VentasPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [onlyDeposits, setOnlyDeposits] = useState(false);
 
   // Dialog / detail state
   const [showDialog, setShowDialog] = useState(false);
@@ -306,9 +308,14 @@ export default function VentasPage() {
     setStatusFilter("all");
     setDateFrom("");
     setDateTo("");
+    setOnlyDeposits(false);
   };
 
-  const hasFilters = statusFilter !== "all" || dateFrom || dateTo;
+  const hasFilters = statusFilter !== "all" || dateFrom || dateTo || onlyDeposits;
+
+  const filteredSales = onlyDeposits
+    ? sales.filter((s) => isDeposit(s.notes))
+    : sales;
 
   const ticketRows = (() => {
     const groups = new Map<
@@ -328,10 +335,11 @@ export default function VentasPage() {
         salesCount: number;
         origin: string;
         priceListName: string;
+        hasDeposit: boolean;
       }
     >();
 
-    for (const s of sales) {
+    for (const s of filteredSales) {
       const ticket = getPosTicketId(s.notes) ?? `single-${s.id}`;
       const current = groups.get(ticket) ?? {
         key: ticket,
@@ -348,6 +356,7 @@ export default function VentasPage() {
         salesCount: 0,
         origin: s.origin,
         priceListName: s.priceList?.name ?? "",
+        hasDeposit: false,
       };
 
       current.saleIds.push(s.id);
@@ -361,6 +370,7 @@ export default function VentasPage() {
       current.status = mergeStatus(current.status, s.status);
       current.invoicedCount += s.invoiced ? 1 : 0;
       current.salesCount += 1;
+      if (isDeposit(s.notes)) current.hasDeposit = true;
       groups.set(ticket, current);
     }
 
@@ -864,6 +874,16 @@ export default function VentasPage() {
           </SelectContent>
         </Select>
 
+        <label className="inline-flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+          <input
+            type="checkbox"
+            checked={onlyDeposits}
+            onChange={(e) => setOnlyDeposits(e.target.checked)}
+            className="h-4 w-4"
+          />
+          Solo señas
+        </label>
+
         {hasFilters && (
           <Button variant="outline" size="sm" onClick={clearFilters}>
             Limpiar filtros
@@ -958,9 +978,19 @@ export default function VentasPage() {
                         className="cursor-pointer hover:underline"
                         onClick={() => setDetailId(firstSaleId)}
                       >
-                        <span className="font-medium text-foreground">
-                          {isSingle ? productsPreview : `${t.salesCount} ítems`}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-foreground">
+                            {isSingle ? productsPreview : `${t.salesCount} ítems`}
+                          </span>
+                          {t.hasDeposit && (
+                            <Badge
+                              variant="outline"
+                              className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[10px] px-1.5 py-0 font-medium"
+                            >
+                              Seña
+                            </Badge>
+                          )}
+                        </div>
                         <div className="text-xs text-muted-foreground">
                           {isSingle ? productsPreview : `${productsPreview}${t.productNames.size > 2 ? "…" : ""}`}
                           {` | ${t.origin === "mayorista" ? "Mayorista" : "Minorista"}`}

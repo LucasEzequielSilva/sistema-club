@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { noScripts } from "@/lib/sanitize";
 
 // ============================================================
 // Projection (manual monthly targets)
@@ -9,7 +10,12 @@ export const upsertProjectionSchema = z.object({
   month: z.number().int().min(0).max(11), // JS month (0-indexed)
   projectedSales: z.number().min(0).optional().nullable(),
   exchangeRate: z.number().positive().optional().nullable(),
-  notes: z.string().max(500).optional().nullable(),
+  notes: z
+    .string()
+    .max(500)
+    .refine(noScripts, "Las notas contienen caracteres no permitidos")
+    .optional()
+    .nullable(),
 });
 
 // ============================================================

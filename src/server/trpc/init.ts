@@ -3,6 +3,9 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
 import { isAdminEmail } from "@/lib/admin";
+import { makeLogger } from "@/lib/logger";
+
+const logger = makeLogger("trpc.init");
 
 /**
  * Defines your router context — what variables do you have access to when processing a request?
@@ -74,6 +77,9 @@ export const createCallerFactory = t.createCallerFactory;
  */
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.session?.accountId || !ctx.session?.email) {
+    logger.warn("Llamada a protectedProcedure sin sesión", {
+      url: ctx.req?.url,
+    });
     throw new TRPCError({ code: "UNAUTHORIZED", message: "Sesión requerida" });
   }
   return next({

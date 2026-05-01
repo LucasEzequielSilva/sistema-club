@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/server/db";
 import { verifySessionToken, COOKIE_NAME } from "@/lib/session";
+import {
+  deriveMarkup,
+  normalizeRoundingMode,
+  roundPrice,
+} from "@/lib/rounding";
 
 async function getAccountId(req: NextRequest): Promise<string | null> {
   const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -65,28 +70,66 @@ export async function GET(req: NextRequest) {
     orderBy: { product: { name: "asc" } },
   });
 
+  const isRI = account.taxStatus === "responsable_inscripto";
+  const roundingMode = normalizeRoundingMode(priceList.roundingMode);
+
   const enriched = items
     .filter((it) => it.product?.isActive)
     .map((it) => {
       const unitCost = calcUnitCost(it.product);
-      const salePrice = unitCost * (1 + it.markupPct / 100);
-      const contributionMargin = salePrice - unitCost;
-      const marginPct = salePrice > 0 ? (contributionMargin / salePrice) * 100 : 0;
-      const salePriceWithIva =
-        account.taxStatus === "responsable_inscripto"
-          ? salePrice * (1 + account.ivaRate / 100)
-          : null;
+      const rawSalePrice = unitCost * (1 + it.markupPct / 100);
+      const rawSalePriceWithIva = isRI
+        ? rawSalePrice * (1 + account.ivaRate / 100)
+        : null;
+
+      let effectiveSalePrice = rawSalePrice;
+      let effectiveSalePriceWithIva = rawSalePriceWithIva;
+      let markupPctEffective = it.markupPct;
+      let rounded = false;
+
+      if (roundingMode !== "none" && unitCost > 0) {
+        const targetGross = isRI ? rawSalePriceWithIva ?? 0 : rawSalePrice;
+        if (targetGross > 0) {
+          const roundedGross = roundPrice(targetGross, roundingMode);
+          if (roundedGross !== targetGross) {
+            rounded = true;
+            if (isRI) {
+              effectiveSalePriceWithIva = roundedGross;
+              effectiveSalePrice = roundedGross / (1 + account.ivaRate / 100);
+            } else {
+              effectiveSalePrice = roundedGross;
+            }
+            markupPctEffective = deriveMarkup(unitCost, effectiveSalePrice);
+          }
+        }
+      }
+
+      const contributionMargin = effectiveSalePrice - unitCost;
+      const marginPct =
+        effectiveSalePrice > 0
+          ? (contributionMargin / effectiveSalePrice) * 100
+          : 0;
 
       return {
         productId: it.productId,
         productName: it.product.name,
         markupPct: it.markupPct,
+        markupPctEffective: Math.round(markupPctEffective * 100) / 100,
         unitCost: Math.round(unitCost * 100) / 100,
-        salePrice: Math.round(salePrice * 100) / 100,
+        salePrice: Math.round(effectiveSalePrice * 100) / 100,
         salePriceWithIva:
-          salePriceWithIva !== null ? Math.round(salePriceWithIva * 100) / 100 : null,
+          effectiveSalePriceWithIva !== null
+            ? Math.round(effectiveSalePriceWithIva * 100) / 100
+            : null,
+        rawSalePrice: Math.round(rawSalePrice * 100) / 100,
+        rawSalePriceWithIva:
+          rawSalePriceWithIva !== null
+            ? Math.round(rawSalePriceWithIva * 100) / 100
+            : null,
         contributionMargin: Math.round(contributionMargin * 100) / 100,
         marginPct: Math.round(marginPct * 100) / 100,
+        roundingMode,
+        rounded,
       };
     });
 

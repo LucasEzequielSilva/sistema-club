@@ -15,6 +15,7 @@ const PUBLIC_PREFIXES = [
   "/favicon.ico",
   "/icon", // Next.js dynamic favicon (icon.svg, icon.png, etc.)
   "/apple-icon", // Apple touch icon
+  "/icons/", // PWA icons (icon-192.png, icon-512.png)
   "/opengraph-image", // OG miniatura para WhatsApp / FB / IG / X
   "/twitter-image", // Twitter card image
   "/manifest.webmanifest",

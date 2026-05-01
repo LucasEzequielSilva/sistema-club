@@ -15,7 +15,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Info } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("es-AR", {
@@ -24,6 +30,15 @@ function formatCurrency(n: number) {
     minimumFractionDigits: 2,
   }).format(n);
 }
+
+type RoundingMode = "none" | "up10" | "up50" | "up100";
+
+const ROUNDING_LABELS: Record<RoundingMode, string> = {
+  none: "Sin redondeo",
+  up10: "Hacia arriba a $10",
+  up50: "Hacia arriba a $50",
+  up100: "Hacia arriba a $100",
+};
 
 type PricingItem = {
   priceListId: string;
@@ -35,6 +50,11 @@ type PricingItem = {
   salePriceWithIva: number | null;
   contributionMargin: number;
   marginPct: number;
+  roundingMode?: RoundingMode;
+  rounded?: boolean;
+  rawSalePrice?: number;
+  rawSalePriceWithIva?: number | null;
+  markupPctEffective?: number;
 };
 
 interface ProductPricingTabProps {
@@ -95,23 +115,61 @@ export function ProductPricingTab({
     }
   };
 
+  const roundUp = (value: number, mode: RoundingMode) => {
+    if (mode === "none" || !value) return value;
+    const step = mode === "up10" ? 10 : mode === "up50" ? 50 : 100;
+    return Math.ceil(value / step) * step;
+  };
+
   // Live-calculate pricing from current markup inputs
-  const liveCalcPricing = (markupPct: number) => {
-    const salePrice = product.unitCost * (1 + markupPct / 100);
-    const salePriceWithIva = isRI
-      ? salePrice * (1 + product.account.ivaRate / 100)
+  const liveCalcPricing = (markupPct: number, roundingMode: RoundingMode = "none") => {
+    const rawSalePrice = product.unitCost * (1 + markupPct / 100);
+    const rawSalePriceWithIva = isRI
+      ? rawSalePrice * (1 + product.account.ivaRate / 100)
       : null;
+
+    let salePrice = rawSalePrice;
+    let salePriceWithIva = rawSalePriceWithIva;
+    let rounded = false;
+    let markupPctEffective = markupPct;
+
+    if (roundingMode !== "none" && product.unitCost > 0) {
+      const targetGross = isRI ? rawSalePriceWithIva ?? 0 : rawSalePrice;
+      if (targetGross > 0) {
+        const roundedGross = roundUp(targetGross, roundingMode);
+        if (roundedGross !== targetGross) {
+          rounded = true;
+          if (isRI) {
+            salePriceWithIva = roundedGross;
+            salePrice = roundedGross / (1 + product.account.ivaRate / 100);
+          } else {
+            salePrice = roundedGross;
+          }
+          markupPctEffective =
+            ((salePrice - product.unitCost) / product.unitCost) * 100;
+        }
+      }
+    }
+
     const contributionMargin = salePrice - product.unitCost;
     const marginPct =
       salePrice > 0 ? (contributionMargin / salePrice) * 100 : 0;
+
     return {
       salePrice: Math.round(salePrice * 100) / 100,
       salePriceWithIva:
         salePriceWithIva !== null
           ? Math.round(salePriceWithIva * 100) / 100
           : null,
+      rawSalePrice: Math.round(rawSalePrice * 100) / 100,
+      rawSalePriceWithIva:
+        rawSalePriceWithIva !== null
+          ? Math.round(rawSalePriceWithIva * 100) / 100
+          : null,
       contributionMargin: Math.round(contributionMargin * 100) / 100,
       marginPct: Math.round(marginPct * 100) / 100,
+      markupPctEffective: Math.round(markupPctEffective * 100) / 100,
+      rounded,
     };
   };
 
@@ -171,7 +229,8 @@ export function ProductPricingTab({
               const currentMarkup = parseFloat(
                 markups[item.priceListId] ?? String(item.markupPct)
               );
-              const live = liveCalcPricing(currentMarkup);
+              const roundingMode = item.roundingMode ?? "none";
+              const live = liveCalcPricing(currentMarkup, roundingMode);
 
               return (
                 <TableRow key={item.priceListId}>
@@ -181,6 +240,28 @@ export function ProductPricingTab({
                       <Badge variant="secondary" className="ml-2 text-[10px]">
                         Default
                       </Badge>
+                    )}
+                    {roundingMode !== "none" && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Badge
+                              variant="secondary"
+                              className="ml-2 text-[10px] bg-emerald-500/10 text-emerald-700 border-emerald-500/20 cursor-help"
+                            >
+                              <Info className="w-3 h-3 mr-0.5" />
+                              {ROUNDING_LABELS[roundingMode]}
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p className="text-xs">
+                              El PV se redondea automáticamente.
+                              {live.rounded &&
+                                ` Markup efectivo: ${live.markupPctEffective.toFixed(2)}%`}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                   </TableCell>
                   <TableCell className="text-center">
@@ -196,13 +277,30 @@ export function ProductPricingTab({
                     />
                   </TableCell>
                   <TableCell className="text-right font-mono">
-                    {formatCurrency(live.salePrice)}
+                    <div className="flex flex-col items-end leading-tight">
+                      <span>{formatCurrency(live.salePrice)}</span>
+                      {live.rounded && (
+                        <span className="text-[10px] text-muted-foreground line-through">
+                          {formatCurrency(live.rawSalePrice)}
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   {isRI && (
                     <TableCell className="text-right font-mono">
-                      {live.salePriceWithIva !== null
-                        ? formatCurrency(live.salePriceWithIva)
-                        : "—"}
+                      {live.salePriceWithIva !== null ? (
+                        <div className="flex flex-col items-end leading-tight">
+                          <span>{formatCurrency(live.salePriceWithIva)}</span>
+                          {live.rounded &&
+                            live.rawSalePriceWithIva !== null && (
+                              <span className="text-[10px] text-muted-foreground line-through">
+                                {formatCurrency(live.rawSalePriceWithIva)}
+                              </span>
+                            )}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </TableCell>
                   )}
                   <TableCell className="text-right font-mono">

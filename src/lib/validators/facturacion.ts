@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { noScripts } from "@/lib/sanitize";
 
 // ============================================================
 // AFIP Config
@@ -32,7 +33,12 @@ export const createInvoiceSchema = z.object({
   // Customer
   docTipo: z.number().int(), // 80, 86, 96, 99
   docNro: z.string().default("0"),
-  customerName: z.string().max(200).optional().nullable(),
+  customerName: z
+    .string()
+    .max(200)
+    .refine(noScripts, "El nombre del cliente contiene caracteres no permitidos")
+    .optional()
+    .nullable(),
 
   // Amounts
   netAmount: z.number().min(0, "Importe neto debe ser >= 0"),

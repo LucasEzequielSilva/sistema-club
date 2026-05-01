@@ -2,10 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSessionToken, COOKIE_NAME } from "@/lib/session";
 import { hashPassword, isHashed, verifyPassword } from "@/lib/password";
 import { db } from "@/server/db";
+import { loginLimiter, clientId, rateLimitedResponse } from "@/lib/rate-limit";
+import { makeLogger } from "@/lib/logger";
+
+const logger = makeLogger("auth");
 
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // 30 días en segundos
 
 export async function POST(req: NextRequest) {
+  const { success, reset } = await loginLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   try {
     const body = await req.json();
     const email: string = body.email ?? "";
@@ -33,6 +40,11 @@ export async function POST(req: NextRequest) {
       : false;
 
     if (!user || !passwordOk) {
+      logger.warn("Login fallido", {
+        email: email.trim().toLowerCase(),
+        ip: clientId(req),
+        reason: !user ? "user_not_found" : "bad_password",
+      });
       await new Promise((r) => setTimeout(r, 500));
       return NextResponse.json(
         { error: "Email o contraseña incorrectos" },
@@ -75,7 +87,8 @@ export async function POST(req: NextRequest) {
     }
 
     return res;
-  } catch {
+  } catch (err) {
+    logger.error("Falló POST /api/auth/login", err, { ip: clientId(req) });
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

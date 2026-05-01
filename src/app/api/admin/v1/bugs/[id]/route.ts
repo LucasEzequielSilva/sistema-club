@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiToken } from "@/lib/api-auth";
 import { db } from "@/server/db";
+import { adminApiLimiter, clientId, rateLimitedResponse } from "@/lib/rate-limit";
 
 const VALID_STATUS = new Set(["open", "investigating", "resolved", "wontfix"]);
 const VALID_SEVERITY = new Set(["low", "medium", "high", "critical"]);
@@ -9,6 +10,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { success, reset } = await adminApiLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   const auth = requireApiToken(req);
   if (!auth.ok) return auth.response;
 
@@ -24,6 +28,9 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { success, reset } = await adminApiLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   const auth = requireApiToken(req);
   if (!auth.ok) return auth.response;
 
@@ -85,6 +92,9 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const { success, reset } = await adminApiLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   const auth = requireApiToken(req);
   if (!auth.ok) return auth.response;
 

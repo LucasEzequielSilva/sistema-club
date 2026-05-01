@@ -51,6 +51,12 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  themeColor: "#0052fe",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Acelerator",
+  },
 };
 
 export default function RootLayout({

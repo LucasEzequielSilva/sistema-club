@@ -831,4 +831,55 @@ export const ventasRouter = router({
 
       return { success: true };
     }),
+
+  // ——————————————————————————————
+  // CONVERT DEPOSIT TO FULL SALE (strip [SEÑA] prefix from notes)
+  // ——————————————————————————————
+  convertDepositToSale: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const sale = await db.sale.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!sale) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Venta no encontrada",
+        });
+      }
+      if (!sale.notes?.startsWith("[SEÑA]")) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Esta venta no está marcada como seña",
+        });
+      }
+      const stripped = sale.notes.replace(/^\[SEÑA\]\s*/, "").trim();
+      return db.sale.update({
+        where: { id: sale.id },
+        data: { notes: stripped.length > 0 ? stripped : null },
+      });
+    }),
+
+  // ——————————————————————————————
+  // MARK AS DEPOSIT (prepend [SEÑA] to notes)
+  // ——————————————————————————————
+  markAsDeposit: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const sale = await db.sale.findFirst({
+        where: { id: input.id, accountId: ctx.accountId },
+      });
+      if (!sale) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Venta no encontrada",
+        });
+      }
+      if (sale.notes?.startsWith("[SEÑA]")) return sale;
+      const newNotes = sale.notes ? `[SEÑA] ${sale.notes}` : "[SEÑA]";
+      return db.sale.update({
+        where: { id: sale.id },
+        data: { notes: newNotes },
+      });
+    }),
 });

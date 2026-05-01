@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiToken } from "@/lib/api-auth";
+import { adminApiLimiter, clientId, rateLimitedResponse } from "@/lib/rate-limit";
 
 export async function GET(req: NextRequest) {
+  const { success, reset } = await adminApiLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   const auth = requireApiToken(req);
   if (!auth.ok) return auth.response;
 

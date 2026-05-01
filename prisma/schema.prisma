@@ -333,13 +333,14 @@ model Product {
 }
 
 model PriceList {
-  id        String    @id @default(cuid())
-  accountId String
-  name      String
-  isDefault Boolean   @default(false)
-  sortOrder Int       @default(0)
-  isActive  Boolean   @default(true)
-  createdAt DateTime  @default(now())
+  id            String    @id @default(cuid())
+  accountId     String
+  name          String
+  isDefault     Boolean   @default(false)
+  sortOrder     Int       @default(0)
+  isActive      Boolean   @default(true)
+  roundingMode  String    @default("none") // none | up10 | up50 | up100
+  createdAt     DateTime  @default(now())
 
   // Relations
   account   Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)

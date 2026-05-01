@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { noScripts } from "@/lib/sanitize";
+
+const NOTES_ERR = "Las notas contienen caracteres no permitidos";
 
 // ============================================================
 // Merchandise Entry (ingreso de mercadería — producción/fabricación)
@@ -13,6 +16,7 @@ export const createMerchandiseEntrySchema = z.object({
   notes: z
     .string()
     .max(1000, "Máximo 1000 caracteres")
+    .refine(noScripts, NOTES_ERR)
     .optional()
     .or(z.literal("")),
 });
@@ -38,6 +42,7 @@ export const createStockAdjustmentSchema = z.object({
   notes: z
     .string()
     .max(1000, "Máximo 1000 caracteres")
+    .refine(noScripts, NOTES_ERR)
     .optional()
     .or(z.literal("")),
 });

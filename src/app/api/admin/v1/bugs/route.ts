@@ -2,11 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireApiToken } from "@/lib/api-auth";
 import { db } from "@/server/db";
 import type { Prisma } from "@/generated/prisma/client";
+import { adminApiLimiter, clientId, rateLimitedResponse } from "@/lib/rate-limit";
+import { stripHtml } from "@/lib/sanitize";
 
 const VALID_STATUS = new Set(["open", "investigating", "resolved", "wontfix"]);
 const VALID_SEVERITY = new Set(["low", "medium", "high", "critical"]);
 
 export async function GET(req: NextRequest) {
+  const { success, reset } = await adminApiLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   const auth = requireApiToken(req);
   if (!auth.ok) return auth.response;
 
@@ -74,6 +79,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const { success, reset } = await adminApiLimiter.limit(clientId(req));
+  if (!success) return rateLimitedResponse(reset);
+
   const auth = requireApiToken(req);
   if (!auth.ok) return auth.response;
 
@@ -87,7 +95,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const title = typeof body?.title === "string" ? body.title.trim() : "";
+  const rawTitle = typeof body?.title === "string" ? body.title.trim() : "";
+  const title = stripHtml(rawTitle).slice(0, 200);
   if (!title) {
     return NextResponse.json(
       { error: "Field `title` is required" },
@@ -95,15 +104,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const description =
+  const rawDescription =
     typeof body?.description === "string" ? body.description : null;
+  const description = rawDescription
+    ? stripHtml(rawDescription).slice(0, 5000)
+    : null;
   const severity =
     typeof body?.severity === "string" && VALID_SEVERITY.has(body.severity)
       ? body.severity
       : "medium";
   const source =
     typeof body?.source === "string" && body.source.trim()
-      ? body.source.trim()
+      ? stripHtml(body.source.trim()).slice(0, 100)
       : "external-api";
   const metadata =
     body?.metadata && typeof body.metadata === "object"

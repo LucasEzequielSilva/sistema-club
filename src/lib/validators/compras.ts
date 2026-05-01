@@ -1,4 +1,9 @@
 import { z } from "zod";
+import { noScripts } from "@/lib/sanitize";
+
+const NOTES_ERR = "Las notas contienen caracteres no permitidos";
+const DESC_ERR = "La descripción contiene caracteres no permitidos";
+const INVOICE_ERR = "El número de factura contiene caracteres no permitidos";
 
 // ============================================================
 // Purchase
@@ -13,6 +18,7 @@ export const createPurchaseSchema = z.object({
   description: z
     .string()
     .max(500, "Máximo 500 caracteres")
+    .refine(noScripts, DESC_ERR)
     .optional()
     .or(z.literal("")),
   unitCost: z.number().min(0, "El costo no puede ser negativo"),
@@ -27,12 +33,14 @@ export const createPurchaseSchema = z.object({
   invoiceNumber: z
     .string()
     .max(50, "Máximo 50 caracteres")
+    .refine(noScripts, INVOICE_ERR)
     .optional()
     .or(z.literal("")),
   dueDate: z.coerce.date().optional().nullable(),
   notes: z
     .string()
     .max(1000, "Máximo 1000 caracteres")
+    .refine(noScripts, NOTES_ERR)
     .optional()
     .or(z.literal("")),
 
@@ -58,15 +66,30 @@ export const updatePurchaseSchema = z.object({
   costCategoryId: z.string().cuid("Clasificación inválida").optional(),
 
   invoiceDate: z.coerce.date().optional(),
-  description: z.string().max(500).optional().nullable(),
+  description: z
+    .string()
+    .max(500)
+    .refine(noScripts, DESC_ERR)
+    .optional()
+    .nullable(),
   unitCost: z.number().min(0).optional(),
   quantity: z.number().min(0.01).optional(),
   discountPct: z.number().min(0).max(100).optional(),
   ivaAmount: z.number().min(0).optional(),
 
-  invoiceNumber: z.string().max(50).optional().nullable(),
+  invoiceNumber: z
+    .string()
+    .max(50)
+    .refine(noScripts, INVOICE_ERR)
+    .optional()
+    .nullable(),
   dueDate: z.coerce.date().optional().nullable(),
-  notes: z.string().max(1000).optional().nullable(),
+  notes: z
+    .string()
+    .max(1000)
+    .refine(noScripts, NOTES_ERR)
+    .optional()
+    .nullable(),
 });
 
 // ============================================================
@@ -83,6 +106,7 @@ export const addPurchasePaymentSchema = z.object({
   notes: z
     .string()
     .max(500, "Máximo 500 caracteres")
+    .refine(noScripts, NOTES_ERR)
     .optional()
     .or(z.literal("")),
 });

@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import {
   Plus,
@@ -20,14 +27,32 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+type RoundingMode = "none" | "up10" | "up50" | "up100";
+
 type PriceList = {
   id: string;
   name: string;
   isDefault: boolean;
   isActive: boolean;
   sortOrder: number;
+  roundingMode: RoundingMode;
   _count: { items: number; sales: number };
 };
+
+const ROUNDING_OPTIONS: { value: RoundingMode; label: string }[] = [
+  { value: "none", label: "Sin redondeo" },
+  { value: "up10", label: "Hacia arriba a $10" },
+  { value: "up50", label: "Hacia arriba a $50" },
+  { value: "up100", label: "Hacia arriba a $100" },
+];
+
+const ROUNDING_LABELS: Record<RoundingMode, string> = ROUNDING_OPTIONS.reduce(
+  (acc, opt) => {
+    acc[opt.value] = opt.label;
+    return acc;
+  },
+  {} as Record<RoundingMode, string>
+);
 
 interface PriceListsTabProps {
   accountId: string;
@@ -49,6 +74,7 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState("");
   const [savingNameId, setSavingNameId] = useState<string | null>(null);
+  const [savingRoundingId, setSavingRoundingId] = useState<string | null>(null);
 
   const formatCurrency = (n: number) =>
     new Intl.NumberFormat("es-AR", {
@@ -240,6 +266,37 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
     }
   };
 
+  const handleRoundingChange = async (id: string, mode: RoundingMode) => {
+    setSavingRoundingId(id);
+    // Optimistic update
+    setLists((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, roundingMode: mode } : l))
+    );
+    try {
+      const res = await fetch("/api/price-lists", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, roundingMode: mode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error || "No se pudo actualizar el redondeo");
+        await load();
+        return;
+      }
+      toast.success("Redondeo actualizado");
+      // Re-load items if this list is expanded so previews refresh
+      if (expandedListId === id) {
+        await loadItems(id);
+      }
+    } catch {
+      toast.error("No se pudo actualizar el redondeo");
+      await load();
+    } finally {
+      setSavingRoundingId(null);
+    }
+  };
+
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`¿Eliminar la lista "${name}"? Esta acción no se puede deshacer.`)) return;
     setDeletingId(id);
@@ -399,6 +456,38 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
                     {list._count.items} {list._count.items === 1 ? "producto" : "productos"} · {" "}
                     {list._count.sales} {list._count.sales === 1 ? "venta" : "ventas"}
                   </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-xs text-muted-foreground">Redondeo:</span>
+                    <Select
+                      value={list.roundingMode ?? "none"}
+                      onValueChange={(v) =>
+                        handleRoundingChange(list.id, v as RoundingMode)
+                      }
+                      disabled={savingRoundingId === list.id}
+                    >
+                      <SelectTrigger size="sm" className="h-7 text-xs w-[200px]">
+                        <SelectValue placeholder="Sin redondeo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROUNDING_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {savingRoundingId === list.id && (
+                      <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                    )}
+                    {list.roundingMode && list.roundingMode !== "none" && (
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] px-1.5 bg-emerald-500/10 text-emerald-700 border-emerald-500/20"
+                      >
+                        {ROUNDING_LABELS[list.roundingMode]}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   <Button
@@ -513,11 +602,31 @@ export function PriceListsTab({ accountId }: PriceListsTabProps) {
                                     disabled={savingMarkup === list.id || savingMarkup === key}
                                   />
                                 </td>
-                                <td className="py-2 text-right font-mono">{formatCurrency(it.salePrice)}</td>
                                 <td className="py-2 text-right font-mono">
-                                  {it.salePriceWithIva !== null && it.salePriceWithIva !== undefined
-                                    ? formatCurrency(it.salePriceWithIva)
-                                    : "—"}
+                                  <div className="flex flex-col items-end leading-tight">
+                                    <span>{formatCurrency(it.salePrice)}</span>
+                                    {it.rounded && it.rawSalePrice !== undefined && (
+                                      <span className="text-[10px] text-muted-foreground line-through">
+                                        {formatCurrency(it.rawSalePrice)}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="py-2 text-right font-mono">
+                                  {it.salePriceWithIva !== null && it.salePriceWithIva !== undefined ? (
+                                    <div className="flex flex-col items-end leading-tight">
+                                      <span>{formatCurrency(it.salePriceWithIva)}</span>
+                                      {it.rounded &&
+                                        it.rawSalePriceWithIva !== undefined &&
+                                        it.rawSalePriceWithIva !== null && (
+                                          <span className="text-[10px] text-muted-foreground line-through">
+                                            {formatCurrency(it.rawSalePriceWithIva)}
+                                          </span>
+                                        )}
+                                    </div>
+                                  ) : (
+                                    "—"
+                                  )}
                                 </td>
                                 <td className="py-2 text-right font-mono">{formatCurrency(it.contributionMargin)}</td>
                                 <td className="py-2 text-right font-mono">{(it.marginPct || 0).toFixed(2)}%</td>

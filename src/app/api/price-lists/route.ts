@@ -69,8 +69,12 @@ export async function PATCH(req: NextRequest) {
   if (!accountId) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const { id, name, isDefault, isActive } = body as {
-    id: string; name?: string; isDefault?: boolean; isActive?: boolean;
+  const { id, name, isDefault, isActive, roundingMode } = body as {
+    id: string;
+    name?: string;
+    isDefault?: boolean;
+    isActive?: boolean;
+    roundingMode?: string;
   };
 
   if (!id) return NextResponse.json({ error: "id requerido" }, { status: 400 });
@@ -78,6 +82,16 @@ export async function PATCH(req: NextRequest) {
   // Verificar que pertenece a este account
   const existing = await db.priceList.findFirst({ where: { id, accountId } });
   if (!existing) return NextResponse.json({ error: "Lista no encontrada" }, { status: 404 });
+
+  if (
+    roundingMode !== undefined &&
+    !["none", "up10", "up50", "up100"].includes(roundingMode)
+  ) {
+    return NextResponse.json(
+      { error: "roundingMode inválido" },
+      { status: 400 }
+    );
+  }
 
   if (isDefault) {
     await db.priceList.updateMany({ where: { accountId }, data: { isDefault: false } });
@@ -89,6 +103,7 @@ export async function PATCH(req: NextRequest) {
       ...(name !== undefined && { name: name.trim() }),
       ...(isDefault !== undefined && { isDefault }),
       ...(isActive !== undefined && { isActive }),
+      ...(roundingMode !== undefined && { roundingMode }),
     },
   });
   return NextResponse.json(updated);

@@ -14,6 +14,7 @@ import {
   updatePaymentAccountSchema,
   createPaymentChannelSchema,
   updatePaymentChannelSchema,
+  updatePriceListSchema,
 } from "@/lib/validators/clasificaciones";
 import { TRPCError } from "@trpc/server";
 
@@ -1002,5 +1003,60 @@ export const clasificacionesRouter = router({
       });
 
       return { success: true };
+    }),
+
+  // ===========================
+  // PRICE LISTS
+  // ===========================
+
+  updatePriceList: protectedProcedure
+    .input(updatePriceListSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { id, ...data } = input;
+
+      const current = await db.priceList.findFirst({
+        where: { id, accountId: ctx.accountId },
+      });
+      if (!current) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Lista de precios no encontrada",
+        });
+      }
+
+      if (data.name) {
+        const dup = await db.priceList.findFirst({
+          where: {
+            accountId: ctx.accountId,
+            name: data.name,
+            id: { not: id },
+          },
+        });
+        if (dup) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Ya existe una lista con el nombre "${data.name}"`,
+          });
+        }
+      }
+
+      if (data.isDefault) {
+        await db.priceList.updateMany({
+          where: { accountId: ctx.accountId },
+          data: { isDefault: false },
+        });
+      }
+
+      return db.priceList.update({
+        where: { id },
+        data: {
+          ...(data.name !== undefined && { name: data.name.trim() }),
+          ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+          ...(data.isActive !== undefined && { isActive: data.isActive }),
+          ...(data.roundingMode !== undefined && {
+            roundingMode: data.roundingMode,
+          }),
+        },
+      });
     }),
 });

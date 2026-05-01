@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { noScripts } from "@/lib/sanitize";
+
+const NOTES_ERR = "Las notas contienen caracteres no permitidos";
+const INVOICE_ERR = "El número de factura contiene caracteres no permitidos";
 
 // ============================================================
 // Sale
@@ -27,12 +31,14 @@ export const createSaleSchema = z.object({
   invoiceNumber: z
     .string()
     .max(50, "Máximo 50 caracteres")
+    .refine(noScripts, INVOICE_ERR)
     .optional()
     .or(z.literal("")),
   dueDate: z.coerce.date().optional().nullable(),
   notes: z
     .string()
     .max(1000, "Máximo 1000 caracteres")
+    .refine(noScripts, NOTES_ERR)
     .optional()
     .or(z.literal("")),
 
@@ -63,9 +69,19 @@ export const updateSaleSchema = z.object({
   discountPct: z.number().min(0).max(100).optional(),
 
   invoiced: z.boolean().optional(),
-  invoiceNumber: z.string().max(50).optional().nullable(),
+  invoiceNumber: z
+    .string()
+    .max(50)
+    .refine(noScripts, INVOICE_ERR)
+    .optional()
+    .nullable(),
   dueDate: z.coerce.date().optional().nullable(),
-  notes: z.string().max(1000).optional().nullable(),
+  notes: z
+    .string()
+    .max(1000)
+    .refine(noScripts, NOTES_ERR)
+    .optional()
+    .nullable(),
 });
 
 // ============================================================
@@ -82,6 +98,7 @@ export const addSalePaymentSchema = z.object({
   notes: z
     .string()
     .max(500, "Máximo 500 caracteres")
+    .refine(noScripts, NOTES_ERR)
     .optional()
     .or(z.literal("")),
 });
