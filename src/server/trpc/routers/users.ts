@@ -2,6 +2,7 @@ import { z } from "zod";
 import { router, protectedProcedure } from "../init";
 import { db } from "@/server/db";
 import { TRPCError } from "@trpc/server";
+import { hashPassword, isHashed } from "@/lib/password";
 
 export const usersRouter = router({
   list: protectedProcedure.query(async ({ ctx }) => {
@@ -38,11 +39,12 @@ export const usersRouter = router({
           message: "Ya existe un usuario con ese email.",
         });
       }
+      const hashedPassword = await hashPassword(input.password);
       return db.user.create({
         data: {
           accountId: ctx.accountId,
           email: input.email.trim().toLowerCase(),
-          password: input.password,
+          password: hashedPassword,
           name: input.name ?? null,
           role: input.role,
         },
@@ -76,11 +78,14 @@ export const usersRouter = router({
       if (!user) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Usuario no encontrado." });
       }
+      const passwordUpdate = data.password
+        ? { password: isHashed(data.password) ? data.password : await hashPassword(data.password) }
+        : {};
       return db.user.update({
         where: { id },
         data: {
           ...(data.email && { email: data.email.trim().toLowerCase() }),
-          ...(data.password && { password: data.password }),
+          ...passwordUpdate,
           ...(data.name !== undefined && { name: data.name }),
           ...(data.role && { role: data.role }),
           ...(data.isActive !== undefined && { isActive: data.isActive }),

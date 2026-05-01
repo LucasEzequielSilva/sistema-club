@@ -21,12 +21,25 @@ function fromb64url(str: string): Uint8Array {
   return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
 }
 
+const isProd = process.env.NODE_ENV === "production";
+const SECRET_FROM_ENV = process.env.SESSION_SECRET;
+
+if (isProd && !SECRET_FROM_ENV) {
+  throw new Error(
+    "SESSION_SECRET no está seteada en producción. Tokens HMAC inseguros, abortando."
+  );
+}
+
+if (isProd && SECRET_FROM_ENV && SECRET_FROM_ENV.length < 32) {
+  throw new Error("SESSION_SECRET muy corto en prod (mínimo 32 chars).");
+}
+
+const SECRET = SECRET_FROM_ENV ?? "dev-insecure-secret-change-me-in-prod";
+
 async function getKey(): Promise<CryptoKey> {
-  const secret =
-    process.env.SESSION_SECRET ?? "dev-insecure-secret-change-me-in-prod";
   return globalThis.crypto.subtle.importKey(
     "raw",
-    enc.encode(secret),
+    enc.encode(SECRET),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign", "verify"]

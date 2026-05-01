@@ -7,6 +7,7 @@ import {
   updateSaleSchema,
   addSalePaymentSchema,
 } from "@/lib/validators/ventas";
+import { isDeposit, addDepositFlag, stripDepositFlag } from "@/lib/sale-flags";
 
 // ============================================================
 // Helpers
@@ -847,16 +848,15 @@ export const ventasRouter = router({
           message: "Venta no encontrada",
         });
       }
-      if (!sale.notes?.startsWith("[SEÑA]")) {
+      if (!isDeposit(sale.notes)) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Esta venta no está marcada como seña",
         });
       }
-      const stripped = sale.notes.replace(/^\[SEÑA\]\s*/, "").trim();
       return db.sale.update({
         where: { id: sale.id },
-        data: { notes: stripped.length > 0 ? stripped : null },
+        data: { notes: stripDepositFlag(sale.notes) },
       });
     }),
 
@@ -875,11 +875,75 @@ export const ventasRouter = router({
           message: "Venta no encontrada",
         });
       }
-      if (sale.notes?.startsWith("[SEÑA]")) return sale;
-      const newNotes = sale.notes ? `[SEÑA] ${sale.notes}` : "[SEÑA]";
+      if (isDeposit(sale.notes)) return sale;
       return db.sale.update({
         where: { id: sale.id },
-        data: { notes: newNotes },
+        data: { notes: addDepositFlag(sale.notes) },
       });
+    }),
+
+  // ——————————————————————————————
+  // CONVERT ALL DEPOSITS IN A POS TICKET TO FULL SALES
+  // ——————————————————————————————
+  convertDepositTicket: protectedProcedure
+    .input(z.object({ ticketId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const sales = await db.sale.findMany({
+        where: {
+          accountId: ctx.accountId,
+          notes: { contains: `[POS_TICKET:${input.ticketId}]` },
+        },
+      });
+      if (sales.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Ticket no encontrado",
+        });
+      }
+      const depositos = sales.filter((s) => isDeposit(s.notes));
+      if (depositos.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Ese ticket no está marcado como seña",
+        });
+      }
+      await db.$transaction(
+        depositos.map((s) =>
+          db.sale.update({
+            where: { id: s.id },
+            data: { notes: stripDepositFlag(s.notes) },
+          })
+        )
+      );
+      return { success: true, converted: depositos.length };
+    }),
+
+  // ——————————————————————————————
+  // MARK ALL SALES IN A POS TICKET AS DEPOSIT
+  // ——————————————————————————————
+  markTicketAsDeposit: protectedProcedure
+    .input(z.object({ ticketId: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const sales = await db.sale.findMany({
+        where: {
+          accountId: ctx.accountId,
+          notes: { contains: `[POS_TICKET:${input.ticketId}]` },
+        },
+      });
+      if (sales.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Ticket no encontrado",
+        });
+      }
+      await db.$transaction(
+        sales.map((s) =>
+          db.sale.update({
+            where: { id: s.id },
+            data: { notes: addDepositFlag(s.notes) },
+          })
+        )
+      );
+      return { success: true, marked: sales.length };
     }),
 });

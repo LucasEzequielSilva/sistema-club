@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useAccountId } from "@/hooks/use-account-id";
-import { isDeposit } from "@/lib/sale-flags";
+import { isDeposit, extractTicketId } from "@/lib/sale-flags";
 import { useConfirm } from "@/hooks/use-confirm";
 
 interface SaleDetailProps {
@@ -145,9 +145,15 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
   const handleConvertDeposit = async () => {
     if (!sale) return;
     if (!(await confirmConvert())) return;
+    const ticketId = extractTicketId(sale.notes);
     try {
-      await trpc.ventas.convertDepositToSale.mutate({ id: sale.id });
-      toast.success("Convertida a venta");
+      if (ticketId) {
+        const r = await trpc.ventas.convertDepositTicket.mutate({ ticketId });
+        toast.success(`Convertidas ${r.converted} ventas del ticket`);
+      } else {
+        await trpc.ventas.convertDepositToSale.mutate({ id: sale.id });
+        toast.success("Convertida a venta");
+      }
       loadSale();
       onRefresh();
     } catch (err: any) {
@@ -157,9 +163,15 @@ export function SaleDetail({ saleId, onBack, onEdit, onRefresh }: SaleDetailProp
 
   const handleMarkAsDeposit = async () => {
     if (!sale) return;
+    const ticketId = extractTicketId(sale.notes);
     try {
-      await trpc.ventas.markAsDeposit.mutate({ id: sale.id });
-      toast.success("Marcada como seña");
+      if (ticketId) {
+        const r = await trpc.ventas.markTicketAsDeposit.mutate({ ticketId });
+        toast.success(`Marcadas ${r.marked} ventas como seña`);
+      } else {
+        await trpc.ventas.markAsDeposit.mutate({ id: sale.id });
+        toast.success("Marcada como seña");
+      }
       loadSale();
       onRefresh();
     } catch (err: any) {

@@ -47,7 +47,7 @@ const primaryNav = [
 
 // ─── Sub-ítems de Finanzas (colapsable) ─────────────────────────────────────
 const finanzasNav = [
-  { title: "Resumen",       href: "/resumen",            icon: BarChart3, locked: true },
+  { title: "Resumen",       href: "/resumen",            icon: BarChart3, locked: false },
   { title: "Cashflow",      href: "/cashflow",           icon: Waves,     locked: true },
   { title: "Cuadro KPIs",   href: "/cuadro-resumen",     icon: Target,    locked: true },
   { title: "Estados",       href: "/estados-resultados", icon: FileText,  locked: true },

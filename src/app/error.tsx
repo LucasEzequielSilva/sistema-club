@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,13 @@ export default function ErrorPage({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const reportedKeys = useRef(new Set<string>());
+
   useEffect(() => {
+    const key = error.digest ?? error.message;
+    if (reportedKeys.current.has(key)) return;
+    reportedKeys.current.add(key);
+
     // Capturar el error al endpoint de soporte automáticamente para que
     // los admins lo vean en /admin/bugs sin que el user tenga que reportar.
     void fetch("/api/support", {

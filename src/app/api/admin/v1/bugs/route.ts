@@ -8,6 +8,9 @@ import { stripHtml } from "@/lib/sanitize";
 const VALID_STATUS = new Set(["open", "investigating", "resolved", "wontfix"]);
 const VALID_SEVERITY = new Set(["low", "medium", "high", "critical"]);
 
+const MAX_DESCRIPTION_CHARS = 5000;
+const MAX_METADATA_BYTES = 4000;
+
 export async function GET(req: NextRequest) {
   const { success, reset } = await adminApiLimiter.limit(clientId(req));
   if (!success) return rateLimitedResponse(reset);
@@ -93,6 +96,13 @@ export async function POST(req: NextRequest) {
       { error: "Invalid JSON body" },
       { status: 400 }
     );
+  }
+
+  if (typeof body?.description === "string" && body.description.length > MAX_DESCRIPTION_CHARS) {
+    return NextResponse.json({ error: "Descripción demasiado larga" }, { status: 413 });
+  }
+  if (body?.metadata && JSON.stringify(body.metadata).length > MAX_METADATA_BYTES) {
+    return NextResponse.json({ error: "Metadata demasiado grande" }, { status: 413 });
   }
 
   const rawTitle = typeof body?.title === "string" ? body.title.trim() : "";

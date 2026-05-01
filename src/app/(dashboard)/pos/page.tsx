@@ -733,43 +733,40 @@ export default function PosPage() {
         0
       );
 
+      // ── Prorrateo precomputado ─────────────────────────────────────────
+      // Construimos una matriz [item][cobro] con los montos prorrateados,
+      // garantizando que la suma por cobro = cobro.amount EXACTO.
+      // El último item de cada cobro absorbe el delta de redondeo (puede ser
+      // negativo si los rounds previos sumaron de más — eso es esperable y
+      // necesario; no clampear a 0, sino al cobro siguiente).
+      const proratedMatrix: number[][] = Array.from(
+        { length: cart.length },
+        () => Array(parsedCobros.length).fill(0)
+      );
+      parsedCobros.forEach((cobro, cIdx) => {
+        let accumulated = 0;
+        for (let i = 0; i < cart.length; i++) {
+          const itemGross = toGross(cart[i].subtotal);
+          const ratio = cartGrossTotal > 0 ? itemGross / cartGrossTotal : 0;
+          const isLast = i === cart.length - 1;
+          const portion = isLast
+            ? round2(cobro.amount - accumulated)
+            : round2(cobro.amount * ratio);
+          proratedMatrix[i][cIdx] = portion;
+          accumulated += portion;
+        }
+      });
+
       for (let i = 0; i < cart.length; i++) {
         const item = cart[i];
-        const itemGross = toGross(item.subtotal);
-        const ratio = cartGrossTotal > 0 ? itemGross / cartGrossTotal : 0;
-        const isLastItem = i === cart.length - 1;
 
-        // Prorrate each cobro for this sale
-        const payments = parsedCobros
-          .map((c) => ({
-            paymentMethodId: c.paymentMethodId,
-            paymentChannelId: c.paymentChannelId,
-            amount: isLastItem
-              ? 0 // placeholder, computed below
-              : round2(c.amount * ratio),
-            paymentDate: batchSaleDate,
-          }))
-          .filter((_, idx) => idx < parsedCobros.length);
-
-        // For the last item, take the delta so totals cross-match exactly
-        if (isLastItem) {
-          // We need to compute per-cobro how much is left after previous items.
-          // Since this runs inside the for-loop for one item at a time, we
-          // instead recompute on the fly: for the last sale, amount is what remains of each cobro.
-          // Simpler: do it directly here by recalculating.
-          parsedCobros.forEach((c, idx) => {
-            let accumulated = 0;
-            for (let j = 0; j < cart.length - 1; j++) {
-              const prevItem = cart[j];
-              const prevGross = toGross(prevItem.subtotal);
-              const prevRatio =
-                cartGrossTotal > 0 ? prevGross / cartGrossTotal : 0;
-              accumulated += round2(c.amount * prevRatio);
-            }
-            const remainder = round2(c.amount - accumulated);
-            payments[idx].amount = Math.max(remainder, 0);
-          });
-        }
+        // Construir payments para esta sale a partir de la matriz prorrateada
+        const payments = parsedCobros.map((c, cIdx) => ({
+          paymentMethodId: c.paymentMethodId,
+          paymentChannelId: c.paymentChannelId,
+          amount: proratedMatrix[i][cIdx],
+          paymentDate: batchSaleDate,
+        }));
 
         const sale = await trpc.ventas.create.mutate({
           productId: item.product.id,

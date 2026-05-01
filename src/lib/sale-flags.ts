@@ -1,4 +1,6 @@
-const DEPOSIT_PREFIX = "[SEÑA]";
+export const DEPOSIT_PREFIX = "[SEÑA]";
+
+const TICKET_RE = /\[POS_TICKET:([^\]]+)\]/;
 
 export function isDeposit(notes: string | null | undefined): boolean {
   return !!notes?.trim().startsWith(DEPOSIT_PREFIX);
@@ -16,4 +18,10 @@ export function addDepositFlag(notes: string | null | undefined): string {
   if (!notes) return DEPOSIT_PREFIX;
   if (isDeposit(notes)) return notes;
   return `${DEPOSIT_PREFIX} ${notes}`;
+}
+
+export function extractTicketId(notes: string | null | undefined): string | null {
+  if (!notes) return null;
+  const m = notes.match(TICKET_RE);
+  return m?.[1] ?? null;
 }

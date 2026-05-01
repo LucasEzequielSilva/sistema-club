@@ -7,22 +7,40 @@ import { makeLogger } from "@/lib/logger";
 const logger = makeLogger("trpc");
 
 /**
- * Configure basic CORS headers
- * You must consider whether you want this in production and alter your return
- * statement accordingly. Otherwise you open up your server to all requests.
+ * CORS allowlist. Cookies-based auth requires a specific origin (no wildcard)
+ * + Allow-Credentials. Si el origen no está en la lista, no devolvemos headers
+ * CORS y el browser bloquea el request cross-origin.
  */
-const setCorsHeaders = (response: Response) => {
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  response.headers.set(
-    "Access-Control-Allow-Headers",
-    "Content-Type, Authorization"
-  );
+const ALLOWED_ORIGINS = [
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://acelerator.matirandazzook.com",
+  "http://localhost:3001",
+  "http://localhost:3000",
+].filter(Boolean);
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return {
+      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Credentials": "true",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      Vary: "Origin",
+    };
+  }
+  return {};
+}
+
+const applyCorsHeaders = (response: Response, req: Request) => {
+  const headers = corsHeadersFor(req);
+  for (const [key, value] of Object.entries(headers)) {
+    response.headers.set(key, value);
+  }
   return response;
 };
 
-export const OPTIONS = () => {
-  return setCorsHeaders(new Response(null, { status: 200 }));
+export const OPTIONS = (req: Request) => {
+  return applyCorsHeaders(new Response(null, { status: 200 }), req);
 };
 
 const handler = (req: Request) =>
@@ -41,7 +59,7 @@ const handler = (req: Request) =>
         code: error.code,
       });
     },
-  }).then(setCorsHeaders);
+  }).then((response) => applyCorsHeaders(response, req));
 
 export const GET = handler;
 export const POST = handler;

@@ -23,6 +23,19 @@ const TYPE_META: Record<SupportType, { label: string; emoji: string; color: numb
   question: { label: "Consulta", emoji: "❓", color: 0x00bcd1 }, // turquesa
 };
 
+const MAX_SCREENSHOT_BYTES = 800_000; // ~600KB png base64
+const MAX_DESCRIPTION_CHARS = 5000;
+const MAX_METADATA_BYTES = 4000;
+
+function escapeDiscord(s: string): string {
+  return s
+    .replace(/@(everyone|here)/gi, "@​$1")    // zero-width space
+    .replace(/<@!?\d+>/g, (m) => m.replace(/^</, "<​"))  // user/role pings
+    .replace(/\]\(/g, "]​(")                  // markdown links
+    .replace(/```/g, "`​``")                  // code block escape
+    .slice(0, 1900);                                // hard truncate
+}
+
 async function notifyDiscord(payload: {
   id: string;
   type: SupportType;
@@ -38,14 +51,20 @@ async function notifyDiscord(payload: {
 
   const meta = TYPE_META[payload.type];
 
+  const safeTitle = escapeDiscord(payload.title);
+  const safeDescription = payload.description ? escapeDiscord(payload.description) : null;
+  const safeUserEmail = payload.userEmail ? escapeDiscord(payload.userEmail) : null;
+  const safeUrl = payload.url ? escapeDiscord(payload.url) : null;
+  const safeUserAgent = payload.userAgent ? escapeDiscord(payload.userAgent) : null;
+
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [];
-  if (payload.userEmail) {
-    fields.push({ name: "Usuario", value: payload.userEmail, inline: true });
+  if (safeUserEmail) {
+    fields.push({ name: "Usuario", value: safeUserEmail, inline: true });
   }
-  if (payload.url) {
+  if (safeUrl) {
     fields.push({
       name: "Página",
-      value: payload.url.length > 200 ? payload.url.slice(0, 200) + "…" : payload.url,
+      value: safeUrl.length > 200 ? safeUrl.slice(0, 200) + "…" : safeUrl,
       inline: true,
     });
   }
@@ -54,22 +73,22 @@ async function notifyDiscord(payload: {
     value: payload.hasScreenshot ? "Sí" : "No",
     inline: true,
   });
-  if (payload.description) {
+  if (safeDescription) {
     fields.push({
       name: "Descripción",
       value:
-        payload.description.length > 1000
-          ? payload.description.slice(0, 1000) + "…"
-          : payload.description,
+        safeDescription.length > 1000
+          ? safeDescription.slice(0, 1000) + "…"
+          : safeDescription,
     });
   }
-  if (payload.userAgent) {
+  if (safeUserAgent) {
     fields.push({
       name: "User-Agent",
       value:
-        payload.userAgent.length > 200
-          ? payload.userAgent.slice(0, 200) + "…"
-          : payload.userAgent,
+        safeUserAgent.length > 200
+          ? safeUserAgent.slice(0, 200) + "…"
+          : safeUserAgent,
     });
   }
   fields.push({
@@ -83,7 +102,7 @@ async function notifyDiscord(payload: {
     avatar_url: "https://matiasrandazzo.com/brand/icon-app.png", // opcional
     embeds: [
       {
-        title: `${meta.emoji} ${meta.label} — ${payload.title}`,
+        title: `${meta.emoji} ${meta.label} — ${safeTitle}`,
         color: meta.color,
         fields,
         footer: { text: "Acelerator · by Matías Randazzo" },
@@ -113,6 +132,17 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = (await req.json()) as SupportBody;
+
+    if (typeof body.screenshot === "string" && body.screenshot.length > MAX_SCREENSHOT_BYTES) {
+      return NextResponse.json({ error: "Screenshot demasiado grande (máx 600KB)" }, { status: 413 });
+    }
+    if (typeof body.description === "string" && body.description.length > MAX_DESCRIPTION_CHARS) {
+      return NextResponse.json({ error: "Descripción demasiado larga" }, { status: 413 });
+    }
+    if (body.metadata && JSON.stringify(body.metadata).length > MAX_METADATA_BYTES) {
+      return NextResponse.json({ error: "Metadata demasiado grande" }, { status: 413 });
+    }
+
     const rawTitle = typeof body.title === "string" ? body.title.trim() : "";
     // Sanitizar: el título se inyecta en Discord embeds y se devuelve por API.
     const title = stripHtml(rawTitle).slice(0, 200);
