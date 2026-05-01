@@ -184,6 +184,10 @@ export default function VentasPage() {
   const [onePayFeePct, setOnePayFeePct] = useState<Record<string, number>>({});
   const [installmentFeePct, setInstallmentFeePct] = useState<Record<string, number>>({});
   const [absorbInstallments, setAbsorbInstallments] = useState(false);
+  // feePct configurado por canal, mapeado a paymentMethodId.
+  // Permite que la tabla de rentabilidad arranque con la comisión real
+  // que el user configuró en Clasificaciones, no con una heurística.
+  const [configuredFees, setConfiguredFees] = useState<Record<string, number>>({});
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -218,7 +222,7 @@ export default function VentasPage() {
           dateTo: new Date(dateTo + "T23:59:59"),
         }),
       };
-      const [result, summaryResult, methodsResult] = await Promise.all([
+      const [result, summaryResult, methodsResult, channelsResult] = await Promise.all([
         trpc.ventas.list.query(params),
         trpc.ventas.getSummary.query({
           ...(dateFrom && { dateFrom: new Date(dateFrom) }),
@@ -227,6 +231,7 @@ export default function VentasPage() {
           }),
         }),
         trpc.clasificaciones.listPaymentMethods.query(),
+        trpc.clasificaciones.listPaymentChannels.query({ isActive: true }),
       ]);
       setSales(result as SaleListItem[]);
       setSummary(summaryResult);
@@ -236,10 +241,31 @@ export default function VentasPage() {
         .map((m) => ({ id: m.id, name: m.name, isActive: m.isActive }));
       setPaymentMethods(methods);
 
+      // Mapear methodId → feePct desde los canales configurados.
+      // Estrategia: por cada método, agarrar el canal default si existe;
+      // sino el primero activo. Si no hay canal, fallback a 0 (luego se
+      // resuelve con la heurística defaultOnePayFee).
+      const channels = channelsResult as Array<{
+        id: string;
+        paymentMethodId: string | null;
+        feePct: number;
+        isDefault: boolean;
+        isActive: boolean;
+      }>;
+      const fees: Record<string, number> = {};
+      for (const m of methods) {
+        const ofMethod = channels.filter((c) => c.paymentMethodId === m.id);
+        const chosen = ofMethod.find((c) => c.isDefault) ?? ofMethod[0];
+        if (chosen) fees[m.id] = chosen.feePct;
+      }
+      setConfiguredFees(fees);
+
       setOnePayFeePct((prev) => {
         const next = { ...prev };
         for (const m of methods) {
-          if (next[m.id] === undefined) next[m.id] = defaultOnePayFee(m.name);
+          if (next[m.id] === undefined) {
+            next[m.id] = fees[m.id] ?? defaultOnePayFee(m.name);
+          }
         }
         return next;
       });
@@ -410,7 +436,7 @@ export default function VentasPage() {
       }
     }
 
-    const onePayPct = onePayFeePct[method.id] ?? defaultOnePayFee(method.name);
+    const onePayPct = onePayFeePct[method.id] ?? configuredFees[method.id] ?? defaultOnePayFee(method.name);
     const installmentPct = absorbInstallments ? installmentFeePct[method.id] ?? 0 : 0;
     const totalFeePct = onePayPct + installmentPct;
     const feeCost = collected * (totalFeePct / 100);
@@ -474,7 +500,7 @@ export default function VentasPage() {
       if (p.paymentChannel?.id) {
         feePct = p.paymentChannel?.feePct ?? 0;
       } else {
-        const one = onePayFeePct[p.paymentMethod.id] ?? defaultOnePayFee(p.paymentMethod.name);
+        const one = onePayFeePct[p.paymentMethod.id] ?? configuredFees[p.paymentMethod.id] ?? defaultOnePayFee(p.paymentMethod.name);
         const inst = absorbInstallments ? installmentFeePct[p.paymentMethod.id] ?? 0 : 0;
         feePct = one + inst;
       }
@@ -736,7 +762,7 @@ export default function VentasPage() {
                       step="0.1"
                       min="0"
                       className="w-[96px] ml-auto text-right"
-                      value={String(onePayFeePct[row.methodId] ?? defaultOnePayFee(row.methodName))}
+                      value={String(onePayFeePct[row.methodId] ?? configuredFees[row.methodId] ?? defaultOnePayFee(row.methodName))}
                       onChange={(e) =>
                         setOnePayFeePct((prev) => ({
                           ...prev,

@@ -1132,7 +1132,7 @@ export default function PosPage() {
       />
 
       {/* Two-panel grid */}
-      <div className="grid grid-cols-1 md:grid-cols-[1fr_384px] gap-4 items-start">
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_440px] gap-4 items-start">
         {/* Left panel — product search + selection */}
         <div className="bg-muted/30 rounded-xl border border-border p-5 space-y-5">
             {/* Price list selector */}
