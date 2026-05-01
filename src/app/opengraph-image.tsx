@@ -16,7 +16,8 @@ export default function OpengraphImage() {
           display: "flex",
           flexDirection: "row",
           alignItems: "center",
-          padding: "60px 80px",
+          padding: "70px 80px",
+          gap: 60,
           fontFamily: "system-ui, -apple-system, sans-serif",
         }}
       >
@@ -26,12 +27,13 @@ export default function OpengraphImage() {
             display: "flex",
             flexDirection: "column",
             flex: "1 1 auto",
+            minWidth: 0,
             gap: 14,
           }}
         >
           <div
             style={{
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: 600,
               letterSpacing: 4,
               color: "#8aebda",
@@ -43,11 +45,11 @@ export default function OpengraphImage() {
           </div>
           <div
             style={{
-              fontSize: 130,
+              fontSize: 96,
               fontWeight: 900,
               color: "#ffffff",
               lineHeight: 1,
-              letterSpacing: -3,
+              letterSpacing: -2,
               display: "flex",
             }}
           >
@@ -55,12 +57,12 @@ export default function OpengraphImage() {
           </div>
           <div
             style={{
-              fontSize: 32,
+              fontSize: 28,
               fontWeight: 400,
               color: "#cbd5e1",
-              lineHeight: 1.25,
-              maxWidth: 620,
-              marginTop: 18,
+              lineHeight: 1.3,
+              maxWidth: 600,
+              marginTop: 16,
               display: "flex",
             }}
           >
@@ -68,13 +70,13 @@ export default function OpengraphImage() {
           </div>
           <div
             style={{
-              fontSize: 22,
+              fontSize: 20,
               fontWeight: 500,
               color: "#94a3b8",
-              marginTop: 28,
+              marginTop: 24,
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: 10,
             }}
           >
             <span style={{ display: "flex" }}>by</span>
@@ -85,8 +87,8 @@ export default function OpengraphImage() {
         {/* Right: OK icon (composed in SVG via JSX) */}
         <div
           style={{
-            width: 360,
-            height: 360,
+            width: 280,
+            height: 280,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -98,8 +100,8 @@ export default function OpengraphImage() {
           <div
             style={{
               position: "absolute",
-              width: 360,
-              height: 360,
+              width: 320,
+              height: 320,
               borderRadius: 200,
               background: "#0052fe",
               opacity: 0.18,
@@ -110,25 +112,25 @@ export default function OpengraphImage() {
           {/* Tile */}
           <div
             style={{
-              width: 280,
-              height: 280,
-              borderRadius: 56,
+              width: 220,
+              height: 220,
+              borderRadius: 44,
               background: "#0052fe",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               boxShadow: "0 30px 80px rgba(0,82,254,0.35)",
               position: "relative",
-              gap: 14,
+              gap: 12,
             }}
           >
             {/* O */}
             <div
               style={{
-                width: 130,
-                height: 130,
-                borderRadius: 65,
-                border: "20px solid #ffffff",
+                width: 100,
+                height: 100,
+                borderRadius: 50,
+                border: "16px solid #ffffff",
                 display: "flex",
               }}
             />
@@ -136,8 +138,8 @@ export default function OpengraphImage() {
             <div
               style={{
                 position: "relative",
-                width: 80,
-                height: 130,
+                width: 60,
+                height: 100,
                 display: "flex",
               }}
             >
@@ -146,8 +148,8 @@ export default function OpengraphImage() {
                   position: "absolute",
                   top: 0,
                   left: 0,
-                  width: 22,
-                  height: 130,
+                  width: 18,
+                  height: 100,
                   background: "#8aebda",
                   borderRadius: 4,
                   display: "flex",
@@ -158,8 +160,8 @@ export default function OpengraphImage() {
                   position: "absolute",
                   bottom: 0,
                   left: 0,
-                  width: 80,
-                  height: 22,
+                  width: 60,
+                  height: 18,
                   background: "#8aebda",
                   borderRadius: 4,
                   display: "flex",
