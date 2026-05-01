@@ -13,6 +13,13 @@ const PUBLIC_PREFIXES = [
   "/fonts/", // Fuentes locales — accesibles desde todas las pantallas públicas
   "/_next/",
   "/favicon.ico",
+  "/icon", // Next.js dynamic favicon (icon.svg, icon.png, etc.)
+  "/apple-icon", // Apple touch icon
+  "/opengraph-image", // OG miniatura para WhatsApp / FB / IG / X
+  "/twitter-image", // Twitter card image
+  "/manifest.webmanifest",
+  "/robots.txt",
+  "/sitemap.xml",
 ];
 
 const ONBOARDING_PATH = "/onboarding";
